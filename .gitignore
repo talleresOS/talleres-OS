@@ -1,0 +1,6 @@
+# Las copias de seguridad contienen datos privados del taller.
+TallerOS-copia-*.json
+*.local.json
+
+.test-results/
+node_modules/

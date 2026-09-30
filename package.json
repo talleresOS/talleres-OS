@@ -1,0 +1,13 @@
+{
+  "name": "talleros-revivauto",
+  "version": "2.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node prepare-release.mjs",
+    "test": "node tests/phase2.mjs && node tests/edge-cases.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.62.1"
+  }
+}

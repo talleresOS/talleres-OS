@@ -1,611 +1,303 @@
-const DB='talleros2',WID=1,stores=['settings','clients','vehicles','orders','parts','employees','payments','costs'];let view='home',tab='summary';const A=document.querySelector('#app');
-const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])),money=x=>new Intl.NumberFormat('es-DO',{style:'currency',currency:'DOP',maximumFractionDigits:0}).format(+x||0),date=x=>x||'—';
-const db=new Promise((ok,no)=>{const r=indexedDB.open(DB,1);r.onupgradeneeded=()=>stores.forEach(s=>r.result.objectStoreNames.contains(s)||r.result.createObjectStore(s,{keyPath:'id',autoIncrement:true}));r.onsuccess=()=>ok(r.result);r.onerror=()=>no(r.error)});
-const api={all:async s=>{let d=await db;return new Promise((ok,no)=>{let r=d.transaction(s).objectStore(s).getAll();r.onsuccess=()=>ok(r.result.filter(x=>x.workshopId===WID));r.onerror=()=>no(r.error)})},get:async(s,id)=>{let d=await db;return new Promise((ok,no)=>{let r=d.transaction(s).objectStore(s).get(+id);r.onsuccess=()=>ok(r.result);r.onerror=()=>no(r.error)})},put:async(s,x)=>{let d=await db;return new Promise((ok,no)=>{let r=d.transaction(s,'readwrite').objectStore(s).put(x);r.onsuccess=()=>ok(r.result);r.onerror=()=>no(r.error)})},del:async(s,id)=>{let d=await db;return new Promise((ok,no)=>{let r=d.transaction(s,'readwrite').objectStore(s).delete(+id);r.onsuccess=ok;r.onerror=()=>no(r.error)})}};
-async function init(){if((await api.all('settings')).length)return;await api.put('settings',{id:1,workshopId:WID,name:'RevivAuto',phone:'',whatsapp:'',address:'',currency:'RD$',prefix:'REV',painterRate:350})}async function data(){let d={};for(let s of stores)d[s]=await api.all(s);return d}const cn=(d,id)=>d.clients.find(x=>x.id===id)?.name||'—',vn=(d,id)=>{let v=d.vehicles.find(x=>x.id===id);return v?`${v.brand} ${v.model} · ${v.plate||'Sin placa'}`:'—'},paid=(d,id)=>d.payments.filter(x=>x.orderId===id).reduce((a,x)=>a+(+x.amount),0),cost=(d,id)=>d.costs.filter(x=>x.orderId===id).reduce((a,x)=>a+(+x.amount),0)+d.parts.filter(x=>x.orderId===id).reduce((a,x)=>a+(+x.materialCost||0)+(+x.laborCost||0)+(+x.otherCost||0),0);
-function shell(title,body,action=''){let nav=[['home','Inicio'],['orders','Órdenes'],['clients','Clientes'],['production','Producción'],['finance','Finanzas'],['settings','Configuración']];return `<div class="shell"><aside class="side"><div class="brand"><b>TallerOS</b><small>Todo tu taller en un solo lugar</small></div><nav class="nav">${nav.map(x=>`<button class="${view===x[0]?'on':''}" onclick="go('${x[0]}')">${x[1]}</button>`).join('')}</nav></aside><main class="main"><header class="top"><div><div class="eyebrow">RevivAuto · Taller de desabolladura y pintura</div><h1>${title}</h1></div>${action}</header>${body}</main></div>`}function table(h,rs,f){return `<table class="table"><thead><tr>${h.map(x=>`<th>${x}</th>`).join('')}</tr></thead><tbody>${rs.length?rs.map(f).join(''):`<tr><td colspan="${h.length}" class="muted">Sin registros.</td></tr>`}</tbody></table>`}
-async function render(){try{let d=await data();if(view==='home'){let active=d.orders.filter(o=>!['Entregada','Cancelada','Cotización'].includes(o.status)),done=d.orders.filter(o=>o.status==='Lista para entregar'),rev=d.orders.reduce((s,o)=>s+(+o.total||0),0),p=d.payments.reduce((s,x)=>s+(+x.amount),0),c=d.orders.reduce((s,o)=>s+cost(d,o.id),0);A.innerHTML=shell('Inicio',`<div class="stats"><div class="stat"><span>Vehículos en taller</span><b>${active.length}</b></div><div class="stat"><span>Trabajos activos</span><b>${active.length}</b></div><div class="stat"><span>Listos para entregar</span><b>${done.length}</b></div><div class="stat"><span>Dinero pendiente</span><b>${money(rev-p)}</b></div><div class="stat"><span>Ingresos</span><b>${money(p)}</b></div><div class="stat"><span>Gastos</span><b>${money(c)}</b></div><div class="stat"><span>Ganancia estimada</span><b>${money(rev-c)}</b></div></div><div class="panel"><h2>Órdenes recientes</h2>${table(['Número','Cliente','Vehículo','Estado','Balance'],d.orders.slice(-8).reverse(),o=>`<tr><td><button class="link" onclick="orderModal(${o.id})">${o.number}</button></td><td>${esc(cn(d,o.clientId))}</td><td>${esc(vn(d,o.vehicleId))}</td><td><span class="badge">${o.status}</span></td><td>${money((+o.total)-paid(d,o.id))}</td></tr>`)}</div>`,`<button class="btn primary" onclick="orderModal()">+ Nueva orden</button>`)}else if(view==='clients')clients(d);else if(view==='orders')orders(d);else if(view==='production')production(d);else if(view==='finance')finance(d);else settings(d)}catch(e){A.innerHTML=`<main class="loading"><div class="error">No se pudo cargar TallerOS: ${esc(e.message)}</div></main>`}}
-function go(v){view=v;render()}function clients(d){A.innerHTML=shell('Clientes',`<div class="panel"><div class="bar"><input class="search" placeholder="Buscar por nombre o teléfono" oninput="search(this)"><button class="btn primary" onclick="clientModal()">+ Nuevo cliente</button></div>${table(['Cliente','Teléfono','WhatsApp','Vehículos',''],d.clients,c=>`<tr class="row"><td><button class="link" onclick="clientModal(${c.id})">${esc(c.name)}</button></td><td>${esc(c.phone)}</td><td>${esc(c.whatsapp||'—')}</td><td>${d.vehicles.filter(v=>v.clientId===c.id).length}</td><td><button class="btn" onclick="clientModal(${c.id})">Abrir</button></td></tr>`)}</div>`)}function orders(d){A.innerHTML=shell('Órdenes',`<div class="panel">${table(['Número','Cliente','Vehículo','Estado','Total'],d.orders,o=>`<tr><td><button class="link" onclick="orderModal(${o.id})">${o.number}</button></td><td>${esc(cn(d,o.clientId))}</td><td>${esc(vn(d,o.vehicleId))}</td><td>${o.status}</td><td>${money(o.total)}</td></tr>`)}</div>`,`<button class="btn primary" onclick="orderModal()">+ Nueva orden</button>`)}function production(d){let states=['Pendiente','Desabolladura','Preparación','Pintura','Secado','Brillado','Terminada'];A.innerHTML=shell('Producción',`<div class="board">${states.map(s=>`<section class="col"><b>${s}</b>${d.parts.filter(p=>p.status===s).map(p=>`<button class="card" onclick="partModal(${p.id})"><b>${d.orders.find(o=>o.id===p.orderId)?.number||'—'}</b><br>${esc(p.description)}<br><small>${esc(vn(d,d.orders.find(o=>o.id===p.orderId)?.vehicleId))}</small></button>`).join('')||'<p class="muted">Sin piezas</p>'}</section>`).join('')}</div>`)}function finance(d){let os=d.orders;A.innerHTML=shell('Finanzas',`<div class="tabs">${['summary','payments','costs','profits'].map(x=>`<button class="${tab===x?'on':''}" onclick="tab='${x}';render()">${{summary:'Resumen',payments:'Pagos',costs:'Costos',profits:'Ganancias'}[x]}</button>`).join('')}</div><div class="panel">${table(['Orden','Total','Pagado','Balance','Ganancia'],os,o=>`<tr><td>${o.number}</td><td>${money(o.total)}</td><td>${money(paid(d,o.id))}</td><td>${money(o.total-paid(d,o.id))}</td><td>${money(o.total-cost(d,o.id))}</td><td><button class="btn" onclick="paymentModal(${o.id})">Pago</button> <button class="btn" onclick="costModal(${o.id})">Costo</button></td></tr>`)}</div>`)}function settings(d){A.innerHTML=shell('Configuración',`<div class="panel"><h2>RevivAuto</h2><p class="muted">Los datos y empleados se administrarán aquí. Esta primera versión se mantiene limpia, sin datos demo automáticos.</p></div>`)}function search(i){document.querySelectorAll('.row').forEach(r=>r.hidden=!r.textContent.toLowerCase().includes(i.value.toLowerCase()))}
-const field=(l,n,v='',type='text',full='')=>{const key=String(n||'').toLowerCase(),numeric=type==='number',telephone=type==='tel'||/phone|telefono|tel[eé]fono|whatsapp/.test(key),mobile=numeric?' inputmode="decimal" step="any"':telephone?' inputmode="tel" autocomplete="tel"':'';return `<div class="field ${full}"><label>${l}</label><input name="${n}" value="${esc(v)}" type="${type}"${mobile}></div>`},close=()=>document.querySelector('#modal')?.remove();function modal(title,body){document.body.insertAdjacentHTML('beforeend',`<div class="modalbg" id="modal"><form class="modal" onsubmit="save(event)"><h2>${title}</h2><div class="form">${body}</div><div class="actions"><button type="button" class="btn" onclick="close()">Cancelar</button><button class="btn primary">Guardar</button></div></form></div>`)}
-async function clientModal(id){let d=await data(),c=id?await api.get('clients',id):{};modal(id?'Cliente':'Nuevo cliente',`${field('Nombre completo *','name',c.name)}${field('Teléfono *','phone',c.phone)}${field('WhatsApp','whatsapp',c.whatsapp)}${field('Cédula/RNC','document',c.document)}${field('Dirección','address',c.address,'text','full')}<input type="hidden" name="kind" value="client"><input type="hidden" name="id" value="${id||''}"><div class="field full"><label>Notas</label><textarea name="notes">${esc(c.notes)}</textarea></div><div class="field full"><b>Vehículo del cliente (opcional)</b></div>${field('Marca','brand')}${field('Modelo','model')}${field('Año','year','','number')}${field('Placa','plate')}${field('Color','color')}${field('VIN','vin')}`)}
-async function orderModal(id){let d=await data(),o=id?await api.get('orders',id):{};modal(id?'Orden':'Nueva orden',`<input type="hidden" name="kind" value="order"><input type="hidden" name="id" value="${id||''}"><div class="field"><label>Cliente *</label><select name="clientId" onchange="filterVehicles(this)"><option value="">Selecciona un cliente</option>${d.clients.map(c=>`<option value="${c.id}" ${c.id===o.clientId?'selected':''}>${esc(c.name)}</option>`).join('')}</select><button type="button" class="link" onclick="close();clientModal()">+ Crear cliente nuevo</button></div><div class="field"><label>Vehículo *</label><select name="vehicleId">${d.vehicles.filter(v=>v.clientId===o.clientId).map(v=>`<option value="${v.id}" ${v.id===o.vehicleId?'selected':''}>${esc(vn(d,v.id))}</option>`).join('')||'<option value="">Selecciona primero un cliente</option>'}</select></div>${field('Fecha de entrada *','entryDate',o.entryDate||new Date().toISOString().slice(0,10),'date')}${field('Fecha estimada de entrega','dueDate',o.dueDate,'date')}<div class="field"><label>Estado</label><select name="status">${['Cotización','Aprobada','Esperando ingreso','En reparación','En preparación','En pintura','En acabado','Lista para entregar','Entregada','Cancelada'].map(s=>`<option ${s===o.status?'selected':''}>${s}</option>`).join('')}</select></div>${field('Precio total','total',o.total,'number')}<div class="field full"><label>Notas</label><textarea name="notes">${esc(o.notes)}</textarea></div>`)}
-async function filterVehicles(s){let d=await data(),target=document.querySelector('#modal select[name="vehicleId"]');target.innerHTML=d.vehicles.filter(v=>v.clientId===+s.value).map(v=>`<option value="${v.id}">${esc(vn(d,v.id))}</option>`).join('')||'<option value="">Este cliente no tiene vehículos</option>'}
-async function save(e){e.preventDefault();let x=Object.fromEntries(new FormData(e.target));try{if(x.kind==='client'){if(!x.name||!x.phone)throw Error('Nombre y teléfono son obligatorios.');let cid=x.id?+x.id:await api.put('clients',{workshopId:WID,name:x.name,phone:x.phone,whatsapp:x.whatsapp,document:x.document,address:x.address,notes:x.notes});if(x.id)await api.put('clients',{workshopId:WID,id:+x.id,name:x.name,phone:x.phone,whatsapp:x.whatsapp,document:x.document,address:x.address,notes:x.notes});if(x.brand&&x.model)await api.put('vehicles',{workshopId:WID,clientId:cid,brand:x.brand,model:x.model,year:x.year,plate:x.plate,color:x.color,vin:x.vin})}if(x.kind==='order'){if(!x.clientId||!x.vehicleId)throw Error('Selecciona un cliente y un vehículo.');let all=await api.all('orders'),max=Math.max(0,...all.map(o=>+(o.number.match(/\d+$/)||[0])[0]));await api.put('orders',{workshopId:WID,id:x.id?+x.id:undefined,number:x.id?(await api.get('orders',x.id)).number:`REV-${String(max+1).padStart(4,'0')}`,clientId:+x.clientId,vehicleId:+x.vehicleId,entryDate:x.entryDate,dueDate:x.dueDate,status:x.status,total:+x.total||0,notes:x.notes})}close();render()}catch(err){alert(err.message)}}
-init().then(render).catch(e=>A.innerHTML=`<main class="loading"><div class="error">${esc(e.message)}</div></main>`);
-/* Personalización del taller: logo persistente en IndexedDB. */
-async function settingsLogo(d){const s=d.settings[0]||{id:1};A.innerHTML=shell('Configuración',`<div class="panel"><h2>Datos del taller</h2><form class="form" onsubmit="saveWorkshop(event,${s.id||1})">${field('Nombre del taller','name',s.name)}${field('Teléfono','phone',s.phone)}${field('WhatsApp','whatsapp',s.whatsapp)}${field('Correo electrónico','email',s.email)}${field('Dirección','address',s.address,'text','full')}${field('RNC/Cédula','document',s.document)}${field('Prefijo de órdenes','prefix',s.prefix||'REV')}${field('Tarifa del pintor por pieza (RD$)','painterRate',s.painterRate||350,'number')}<div class="field full"><label>Logo del taller</label><div id="logoPreview">${s.logoData?`<img class="workshop-logo" src="${s.logoData}" alt="Logo del taller">`:'<span class="muted">Aún no hay logo cargado.</span>'}</div><input id="logoInput" type="file" accept="image/png,image/jpeg,image/webp" onchange="uploadLogo(this,${s.id||1})"><span class="muted">PNG, JPG, JPEG o WEBP · máximo 2 MB.</span><div class="actions"><button type="button" class="btn" onclick="document.getElementById('logoInput').click()">${s.logoData?'Cambiar logo':'Subir logo'}</button>${s.logoData?`<button type="button" class="btn danger" onclick="removeLogo(${s.id||1})">Eliminar logo</button>`:''}</div></div><div class="field full"><button class="btn primary">Guardar datos del taller</button></div></form></div>`)}
-async function saveWorkshop(e,id){e.preventDefault();try{const v=Object.fromEntries(new FormData(e.target)),old=await api.get('settings',id);await api.put('settings',{...old,...v,id:+id,workshopId:WID,painterRate:+v.painterRate||350});await render()}catch(err){alert(`No se pudieron guardar los datos: ${err.message}`)}}
-async function uploadLogo(input,id){const file=input.files?.[0];if(!file)return;if(!['image/png','image/jpeg','image/webp'].includes(file.type))return alert('Selecciona una imagen PNG, JPG, JPEG o WEBP.');if(file.size>2*1024*1024)return alert('El logo debe pesar menos de 2 MB.');const reader=new FileReader();reader.onload=async()=>{try{const old=await api.get('settings',id);await api.put('settings',{...old,id:+id,workshopId:WID,logoData:reader.result});await render()}catch(e){alert(`No se pudo guardar el logo: ${e.message}`)}};reader.onerror=()=>alert('No se pudo leer esa imagen.');reader.readAsDataURL(file)}
-async function removeLogo(id){if(!confirm('¿Eliminar el logo del taller?'))return;const old=await api.get('settings',id);delete old.logoData;await api.put('settings',old);render()}
-async function applyWorkshopLogo(){try{const settings=(await api.all('settings'))[0];const brand=document.querySelector('.brand');if(!brand||!settings)return;if(settings.logoData)brand.innerHTML=`<img class="workshop-logo side-logo" src="${settings.logoData}" alt="${esc(settings.name)}"><small>${esc(settings.name)}</small>`;else brand.innerHTML=`<b>${esc(settings.name||'TallerOS')}</b><small>Todo tu taller en un solo lugar</small>`}catch(_) {}}
-new MutationObserver(()=>applyWorkshopLogo()).observe(A,{childList:true,subtree:true});
-let settingsPainted=false;
-new MutationObserver(()=>{if(view==='settings'&&!settingsPainted){settingsPainted=true;data().then(settingsLogo)}}).observe(A,{childList:true,subtree:true});
-/* Seguridad de claves: los stores usan keyPath "id" con autoIncrement.
-   Al crear, nunca se envía id vacío; IndexedDB genera una clave numérica válida. */
-const originalPut=api.put;
-api.put=async function(store,record){const value={...record};if(Object.prototype.hasOwnProperty.call(value,'id')&&(value.id===undefined||value.id===null||value.id===''||Number.isNaN(value.id)))delete value.id;return originalPut(store,value)};
-api.create=async function(store,record){const value={...record};delete value.id;return api.put(store,value)};
-let pendingOrderClientId=null;
-window.createVehicleFromOrder=async function(){const clientId=document.querySelector('#modal select[name="clientId"]')?.value;if(!clientId)return alert('Selecciona primero el cliente de la orden.');pendingOrderClientId=Number(clientId);const d=await data();document.querySelector('#modal')?.remove();modal('Agregar vehículo',`<input type="hidden" name="kind" value="quickVehicle"><input type="hidden" name="clientId" value="${clientId}"><div class="field full"><label>Cliente propietario</label><input value="${esc(cn(d,Number(clientId)))}" disabled></div>${field('Marca *','brand')}${field('Modelo *','model')}${field('Año','year','','number')}${field('Placa','plate')}${field('Color','color')}${field('VIN (opcional)','vin')}`)};
-const previousSave=window.save;
-window.save=async function(event){const form=event.target;if(new FormData(form).get('kind')!=='quickVehicle')return previousSave(event);event.preventDefault();const v=Object.fromEntries(new FormData(form));try{if(!v.brand?.trim()||!v.model?.trim())throw new Error('Marca y modelo son obligatorios.');await api.create('vehicles',{workshopId:WID,clientId:Number(v.clientId),brand:v.brand,model:v.model,year:v.year,plate:v.plate,color:v.color,vin:v.vin,notes:''});close();await orderModal();const select=document.querySelector('#modal select[name="clientId"]');if(select){select.value=String(pendingOrderClientId);await filterVehicles(select)}pendingOrderClientId=null}catch(e){alert(`No se pudo guardar el vehículo: ${e.message}`)}};
-new MutationObserver(()=>{const orderForm=document.querySelector('#modal form input[name="kind"][value="order"]');if(!orderForm||orderForm.dataset.vehicleButton)return;orderForm.dataset.vehicleButton='1';const vehicle=orderForm.closest('form').querySelector('select[name="vehicleId"]');if(vehicle)vehicle.insertAdjacentHTML('afterend','<button type="button" class="link" onclick="createVehicleFromOrder()">+ Crear vehículo nuevo para este cliente</button>')}).observe(document.body,{childList:true,subtree:true});
-document.addEventListener('submit',event=>{if(new FormData(event.target).get('kind')==='quickVehicle'){event.preventDefault();event.stopImmediatePropagation();window.save(event)}},true);
-/* Rentabilidad por orden: usa costos vinculados a orderId, sin afectar producción. */
-const sumType=(items,type)=>items.filter(x=>x.type===type).reduce((s,x)=>s+Number(x.amount||0),0);
-window.rentabilityModal=async function(orderId){const d=await data(),order=d.orders.find(o=>o.id===Number(orderId));if(!order)return;const list=d.costs.filter(c=>c.orderId===Number(orderId)),labor=sumType(list,'Mano de obra'),materials=sumType(list,'Materiales'),others=sumType(list,'Otros costos'),total=labor+materials+others,profit=Number(order.total||0)-total,pay=paid(d,orderId),margin=Number(order.total||0)?profit/Number(order.total)*100:0;document.querySelector('#modal')?.remove();document.body.insertAdjacentHTML('beforeend',`<div class="modalbg" id="modal"><div class="modal"><h2>Rentabilidad · ${order.number}</h2><div class="stats"><div class="stat"><span>Precio del trabajo</span><b>${money(order.total)}</b></div><div class="stat"><span>Costo total</span><b>${money(total)}</b></div><div class="stat"><span>Ganancia estimada</span><b>${money(profit)}</b></div><div class="stat"><span>Margen</span><b>${margin.toFixed(1)}%</b></div><div class="stat"><span>Total cobrado</span><b>${money(pay)}</b></div><div class="stat"><span>Balance pendiente</span><b>${money(Number(order.total||0)-pay)}</b></div></div><div class="tabs"><button class="on" onclick="rentForm(${orderId},'Mano de obra')">+ Mano de obra</button><button onclick="rentForm(${orderId},'Materiales')">+ Material</button><button onclick="rentForm(${orderId},'Otros costos')">+ Otro costo</button></div><div class="panel"><h2>Costos registrados</h2>${list.length?table(['Tipo','Detalle','Monto'],list,c=>`<tr><td>${esc(c.type)}</td><td>${esc(c.description||c.concept||'—')}</td><td>${money(c.amount)}</td></tr>`):'<p class="muted">Aún no hay costos para esta orden.</p>'}</div><div class="actions"><button class="btn" onclick="close()">Cerrar</button></div></div></div>`)};
-window.rentForm=function(orderId,type){const dsc=type==='Mano de obra'?`<div class="field"><label>Empleado</label><select name="employeeId"><option value="">Selecciona un empleado</option></select></div><div class="field"><label>Trabajo realizado</label><input name="description" placeholder="Ej. Preparación"></div><div class="field"><label>Forma de pago</label><select name="paymentMode"><option>Por pieza</option><option>Monto fijo</option></select></div><div class="field"><label>Cantidad de piezas</label><input name="quantity" type="number" value="1"></div><div class="field"><label>Pago por pieza / monto</label><input name="unitAmount" type="number"></div>`:type==='Materiales'?`<div class="field"><label>Material</label><input name="description" placeholder="Ej. Pintura"></div><div class="field"><label>Cantidad</label><input name="quantity" type="number" value="1"></div><div class="field"><label>Costo total</label><input name="amount" type="number"></div>`:`<div class="field"><label>Concepto</label><input name="description"></div><div class="field"><label>Monto</label><input name="amount" type="number"></div>`;document.querySelector('#modal')?.remove();document.body.insertAdjacentHTML('beforeend',`<div class="modalbg" id="modal"><form class="modal" onsubmit="saveRent(event,${orderId},'${type}')"><h2>Agregar ${type}</h2><div class="form">${dsc}</div><div class="actions"><button type="button" class="btn" onclick="rentabilityModal(${orderId})">Cancelar</button><button class="btn primary">Guardar costo</button></div></form></div>`)};
-window.saveRent=async function(e,orderId,type){e.preventDefault();try{const v=Object.fromEntries(new FormData(e.target));let amount=Number(v.amount||0);if(type==='Mano de obra'){const unit=Number(v.unitAmount||0),qty=Number(v.quantity||1);amount=v.paymentMode==='Por pieza'?unit*qty:unit}if(!amount||amount<0)throw new Error('Indica un monto válido.');if(!v.description?.trim()&&type!=='Mano de obra')throw new Error('Describe el costo.');await api.create('costs',{workshopId:WID,orderId:Number(orderId),type,employeeId:v.employeeId?Number(v.employeeId):null,description:v.description||'Mano de obra',quantity:Number(v.quantity||1),paymentMode:v.paymentMode||'',amount});await rentabilityModal(orderId);await render()}catch(err){alert(`No se pudo guardar el costo: ${err.message}`)}};
-new MutationObserver(()=>{const form=document.querySelector('#modal form input[name="kind"][value="order"]');if(!form||!form.value)return;const id=form.closest('form').querySelector('input[name="id"]')?.value;if(!id||form.dataset.rent)return;form.dataset.rent='1';form.closest('form').querySelector('.actions')?.insertAdjacentHTML('afterbegin',`<button type="button" class="btn" onclick="rentabilityModal(${id})">Rentabilidad</button>`)}).observe(document.body,{childList:true,subtree:true});
-window.rentForm=async function(orderId,type){const d=await data();const employees=d.employees.map(e=>`<option value="${e.id}">${esc(e.name)} · ${esc(e.role||'Otro')}</option>`).join('');const body=type==='Mano de obra'?`<div class="field"><label>Empleado</label><select name="employeeId"><option value="">Selecciona un empleado</option>${employees}</select></div><div class="field"><label>Trabajo realizado</label><input name="description"></div><div class="field"><label>Forma de pago</label><select name="paymentMode"><option>Por pieza</option><option>Monto fijo</option></select></div><div class="field"><label>Cantidad de piezas</label><input name="quantity" type="number" value="1"></div><div class="field"><label>Pago por pieza / monto</label><input name="unitAmount" type="number"></div>`:type==='Materiales'?`<div class="field"><label>Material</label><input name="description"></div><div class="field"><label>Cantidad</label><input name="quantity" type="number" value="1"></div><div class="field"><label>Costo total</label><input name="amount" type="number"></div>`:`<div class="field"><label>Concepto</label><input name="description"></div><div class="field"><label>Monto</label><input name="amount" type="number"></div>`;document.querySelector('#modal')?.remove();document.body.insertAdjacentHTML('beforeend',`<div class="modalbg" id="modal"><form class="modal" onsubmit="saveRent(event,${orderId},'${type}')"><h2>Agregar ${type}</h2><div class="form">${body}</div><div class="actions"><button type="button" class="btn" onclick="rentabilityModal(${orderId})">Cancelar</button><button class="btn primary">Guardar costo</button></div></form></div>`)};
-/* Producción y Finanzas usan exactamente las mismas piezas y costos de IndexedDB. */
-production=function(d){const stages=['Pendiente','Desabolladura','Preparación','Pintura','Brillado','Terminada'];A.innerHTML=shell('Producción',`<div class="board">${stages.map(stage=>`<section class="col"><b>${stage}</b>${d.parts.filter(p=>p.status===stage).map(p=>{const o=d.orders.find(x=>x.id===p.orderId);return `<button class="card" onclick="partModal(${p.id})"><b>${o?.number||'—'}</b><br>${esc(p.description||'Trabajo sin nombre')}<br><small>${esc(cn(d,o?.clientId))} · ${esc(vn(d,o?.vehicleId))}</small><br><small>${esc(d.employees.find(e=>e.id===p.employeeId)?.name||'Sin asignar')}</small></button>`}).join('')||'<p class="muted">Sin piezas</p>'}</section>`).join('')}</div>`)};
-window.partModal=async function(id=null,orderId=null){const d=await data(),p=id?await api.get('parts',id):{},order=orderId||p.orderId;document.querySelector('#modal')?.remove();modal(id?'Editar trabajo':'Agregar pieza/trabajo',`<input type="hidden" name="kind" value="part"><input type="hidden" name="id" value="${id||''}"><input type="hidden" name="orderId" value="${order||''}">${field('Descripción *','description',p.description)}<div class="field"><label>Estado</label><select name="status">${['Pendiente','Desabolladura','Preparación','Pintura','Brillado','Terminada'].map(s=>`<option ${p.status===s?'selected':''}>${s}</option>`).join('')}</select></div><div class="field"><label>Empleado responsable</label><select name="employeeId"><option value="">Sin asignar</option>${d.employees.map(e=>`<option value="${e.id}" ${e.id===p.employeeId?'selected':''}>${esc(e.name)}</option>`).join('')}</select></div>${field('Precio de la pieza','price',p.price,'number')}`)};
-const basicSave=window.save;window.save=async function(e){const form=e.target,dataForm=new FormData(form);if(dataForm.get('kind')!=='part')return basicSave(e);e.preventDefault();const v=Object.fromEntries(dataForm);if(!v.description?.trim())return alert('Describe la pieza o trabajo.');await api.put('parts',{workshopId:WID,id:v.id?Number(v.id):undefined,orderId:Number(v.orderId),description:v.description,status:v.status,employeeId:v.employeeId?Number(v.employeeId):null,price:Number(v.price||0),materialCost:0,laborCost:0,otherCost:0});close();render()};
-new MutationObserver(()=>{const id=document.querySelector('#modal form input[name="kind"][value="order"]')?.closest('form')?.querySelector('input[name="id"]')?.value;if(!id)return;const actions=document.querySelector('#modal .actions');if(actions&&!actions.dataset.parts){actions.dataset.parts='1';actions.insertAdjacentHTML('afterbegin',`<button type="button" class="btn" onclick="partModal(null,${id})">+ Agregar pieza</button>`)}}).observe(document.body,{childList:true,subtree:true});
-document.addEventListener('submit',event=>{if(new FormData(event.target).get('kind')==='part'){event.preventDefault();event.stopImmediatePropagation();window.save(event)}},true);
-/* Producción es una proyección directa de orders; no mantiene registros propios. */
-const productionStage=status=>({"En reparación":"Desabolladura","En preparación":"Preparación","En pintura":"Pintura","En acabado":"Brillado","Lista para entregar":"Terminada","Entregada":"Terminada"}[status]||'Pendiente');
-production=function(d){const stages=['Pendiente','Desabolladura','Preparación','Pintura','Brillado','Terminada'],active=d.orders.filter(o=>o.status!=='Cancelada');A.innerHTML=shell('Producción',`<div class="board">${stages.map(stage=>`<section class="col"><b>${stage}</b>${active.filter(o=>productionStage(o.status)===stage).map(o=>{const pcs=d.parts.filter(p=>p.orderId===o.id);return `<button class="card" onclick="orderStageModal(${o.id})"><b>${o.number}</b><br>${esc(cn(d,o.clientId))}<br><small>${esc(vn(d,o.vehicleId))}</small><br><span class="badge">${esc(o.status)}</span><br><small>Entrega: ${esc(o.dueDate||'Sin fecha')}</small>${pcs.length?`<br><small>${pcs.length} pieza(s)</small>`:''}</button>`}).join('')||'<p class="muted">Sin órdenes</p>'}</section>`).join('')}</div>`)};
-window.orderStageModal=async function(id){const order=await api.get('orders',id);document.querySelector('#modal')?.remove();document.body.insertAdjacentHTML('beforeend',`<div class="modalbg" id="modal"><form class="modal" onsubmit="saveOrderStage(event,${id})"><h2>${esc(order.number)} · Actualizar proceso</h2><div class="form"><div class="field full"><label>Estado de la orden</label><select name="status">${['Cotización','Aprobada','Esperando ingreso','En reparación','En preparación','En pintura','En acabado','Lista para entregar','Entregada','Cancelada'].map(s=>`<option ${s===order.status?'selected':''}>${s}</option>`).join('')}</select></div></div><div class="actions"><button type="button" class="btn" onclick="close()">Cancelar</button><button class="btn primary">Guardar estado</button></div></form></div>`)};
-window.saveOrderStage=async function(e,id){e.preventDefault();const order=await api.get('orders',id),status=new FormData(e.target).get('status');await api.put('orders',{...order,status});close();render()};
-const DEFAULT_ROLES=['Desabollador','Preparador','Empapelador/Desarmador','Pintor','Brillador'];
-async function roles(){const s=(await api.all('settings'))[0]||{};return [...new Set([...DEFAULT_ROLES,...(s.customRoles||[])])]}async function saveRole(name){const n=name.trim();if(!n)return;const s=(await api.all('settings'))[0];const list=[...(s.customRoles||[])];if(!list.some(x=>x.toLowerCase()===n.toLowerCase()))list.push(n);await api.put('settings',{...s,customRoles:list});}
-window.employeeModal=async function(id=null){const d=await data(),e=id?await api.get('employees',id):{},r=await roles();document.body.insertAdjacentHTML('beforeend',`<div class="modalbg" id="modal"><form class="modal" onsubmit="saveEmployee(event,${id||'null'})"><h2>${id?'Editar empleado':'Agregar empleado'}</h2><div class="form">${field('Nombre *','name',e.name)}${field('Teléfono','phone',e.phone)}<div class="field"><label>Puesto</label><select name="role">${r.map(x=>`<option ${x===e.role?'selected':''}>${esc(x)}</option>`).join('')}</select></div><div class="field"><label>Estado</label><select name="active"><option value="true" ${e.active!==false?'selected':''}>Activo</option><option value="false" ${e.active===false?'selected':''}>Inactivo</option></select></div>${field('Tarifa por pieza (opcional)','pieceRate',e.pieceRate,'number')}${field('Pago fijo (opcional)','fixedPay',e.fixedPay,'number')}</div><div class="actions"><button type="button" class="btn" onclick="close()">Cancelar</button><button class="btn primary">Guardar empleado</button></div></form></div>`)};
-window.saveEmployee=async function(e,id){e.preventDefault();const v=Object.fromEntries(new FormData(e.target));if(!v.name?.trim())return alert('El nombre del empleado es obligatorio.');await api.put('employees',{workshopId:WID,id:id?Number(id):undefined,name:v.name,phone:v.phone,role:v.role,active:v.active==='true',pieceRate:Number(v.pieceRate||0),fixedPay:Number(v.fixedPay||0)});close();render()};
-window.roleModal=()=>document.body.insertAdjacentHTML('beforeend',`<div class="modalbg" id="modal"><form class="modal" onsubmit="saveRoleForm(event)"><h2>Agregar puesto</h2><div class="form">${field('Nombre del puesto','roleName')}</div><div class="actions"><button type="button" class="btn" onclick="close()">Cancelar</button><button class="btn primary">Guardar puesto</button></div></form></div>`);
-window.saveRoleForm=async function(e){e.preventDefault();await saveRole(new FormData(e.target).get('roleName')||'');close();render()};
-new MutationObserver(async()=>{const settingForm=document.querySelector('#modal form')||document.querySelector('.main form');if(view!=='settings'||!settingForm||settingForm.dataset.employees)return;settingForm.dataset.employees='1';const d=await data();settingForm.insertAdjacentHTML('beforeend',`<div class="field full"><hr><h2>Empleados y puestos</h2><div class="actions"><button type="button" class="btn" onclick="employeeModal()">+ Agregar empleado</button><button type="button" class="btn" onclick="roleModal()">+ Agregar puesto</button></div>${d.employees.map(e=>`<div class="card"><b>${esc(e.name)}</b><br><small>${esc(e.role||'Sin puesto')} · ${e.active===false?'Inactivo':'Activo'}</small><button type="button" class="link" onclick="employeeModal(${e.id})">Editar</button></div>`).join('')||'<p class="muted">Aún no hay empleados.</p>'}</div>`)}).observe(A,{childList:true,subtree:true});
-window.rentForm=async function(orderId,type){const d=await data(),active=d.employees.filter(e=>e.active!==false);const body=type==='Mano de obra'?`<div class="field"><label>Empleado</label><select name="employeeId" onchange="fillEmployeeRate(this)"><option value="">Selecciona un empleado</option>${active.map(e=>`<option value="${e.id}" data-role="${esc(e.role||'Otro')}" data-rate="${e.pieceRate||0}">${esc(e.name)} · ${esc(e.role||'Otro')}</option>`).join('')}</select><small id="employeeRole" class="muted"></small></div><div class="field"><label>Trabajo realizado</label><input name="description"></div><div class="field"><label>Forma de pago</label><select name="paymentMode"><option>Por pieza</option><option>Monto fijo</option></select></div><div class="field"><label>Cantidad de piezas</label><input name="quantity" type="number" value="1"></div><div class="field"><label>Pago por pieza / monto</label><input name="unitAmount" type="number"></div>`:type==='Materiales'?`<div class="field"><label>Material</label><input name="description"></div><div class="field"><label>Cantidad</label><input name="quantity" type="number" value="1"></div><div class="field"><label>Costo total</label><input name="amount" type="number"></div>`:`<div class="field"><label>Concepto</label><input name="description"></div><div class="field"><label>Monto</label><input name="amount" type="number"></div>`;document.querySelector('#modal')?.remove();document.body.insertAdjacentHTML('beforeend',`<div class="modalbg" id="modal"><form class="modal" onsubmit="saveRent(event,${orderId},'${type}')"><h2>Agregar ${type}</h2><div class="form">${body}</div><div class="actions"><button type="button" class="btn" onclick="rentabilityModal(${orderId})">Cancelar</button><button class="btn primary">Guardar costo</button></div></form></div>`)};
-window.fillEmployeeRate=select=>{const option=select.options[select.selectedIndex],form=select.closest('form');form.querySelector('#employeeRole').textContent=option.dataset.role?`Puesto: ${option.dataset.role}`:'';if(option.dataset.rate&&Number(option.dataset.rate)>0)form.querySelector('[name="unitAmount"]').value=option.dataset.rate};
-/* Asignaciones de mano de obra: una sola fuente de verdad dentro de cada pieza. */
-window.laborAssignmentModal=async function(partId){const d=await data(),part=await api.get('parts',partId),active=d.employees.filter(e=>e.active!==false);document.querySelector('#modal')?.remove();const rows=(part.laborAssignments||[]).map(a=>`<tr><td>${esc(d.employees.find(e=>e.id===a.employeeId)?.name||'Empleado')}</td><td>${esc(a.role||'')}</td><td>${a.quantity}</td><td>${money(a.total)}</td></tr>`).join('');document.body.insertAdjacentHTML('beforeend',`<div class="modalbg" id="modal"><form class="modal" onsubmit="saveLaborAssignment(event,${partId})"><h2>Empleados · ${esc(part.description)}</h2><div class="panel">${rows?`<table class="table"><thead><tr><th>Empleado</th><th>Puesto</th><th>Piezas</th><th>Total</th></tr></thead><tbody>${rows}</tbody></table>`:'<p class="muted">Sin empleados asignados.</p>'}</div><div class="form"><div class="field"><label>Empleado</label><select name="employeeId" onchange="laborRate(this)"><option value="">Selecciona un empleado</option>${active.map(e=>`<option value="${e.id}" data-role="${esc(e.role||'Otro')}" data-rate="${e.pieceRate||0}">${esc(e.name)} · ${esc(e.role||'Otro')}</option>`).join('')}</select></div><div class="field"><label>Puesto</label><input name="role" readonly></div><div class="field"><label>Forma de pago</label><select name="mode"><option>Por pieza</option><option>Monto fijo</option></select></div><div class="field"><label>Cantidad de piezas</label><input name="quantity" type="number" value="1"></div><div class="field"><label>Tarifa por pieza / monto</label><input name="rate" type="number"></div><div class="field"><label>Trabajo realizado</label><input name="work" value="${esc(part.description)}"></div></div><div class="actions"><button type="button" class="btn" onclick="close()">Cerrar</button><button class="btn primary">Agregar empleado</button></div></form></div>`)};
-window.laborRate=s=>{const o=s.options[s.selectedIndex],f=s.closest('form');f.role.value=o.dataset.role||'';if(o.dataset.rate)f.rate.value=o.dataset.rate};
-window.saveLaborAssignment=async function(e,partId){e.preventDefault();try{const v=Object.fromEntries(new FormData(e.target)),part=await api.get('parts',partId),employeeId=Number(v.employeeId),quantity=Number(v.quantity||1),rate=Number(v.rate||0);if(!employeeId||!quantity||rate<0)throw new Error('Selecciona un empleado e indica una tarifa válida.');const total=v.mode==='Por pieza'?quantity*rate:rate;const assignments=[...(part.laborAssignments||[]),{employeeId,role:v.role,quantity,rate,mode:v.mode,total,work:v.work,date:new Date().toISOString().slice(0,10)}];await api.put('parts',{...part,laborAssignments:assignments,laborCost:assignments.reduce((s,a)=>s+Number(a.total||0),0)});await laborAssignmentModal(partId);await render()}catch(err){alert(`No se pudo guardar la mano de obra: ${err.message}`)}};
-new MutationObserver(()=>{const partForm=document.querySelector('#modal form input[name="kind"][value="part"]')?.closest('form'),id=partForm?.querySelector('input[name="id"]')?.value;if(!partForm||!id||partForm.dataset.labor)return;partForm.dataset.labor='1';partForm.querySelector('.actions')?.insertAdjacentHTML('afterbegin',`<button type="button" class="btn" onclick="laborAssignmentModal(${id})">Empleados y mano de obra</button>`)}).observe(document.body,{childList:true,subtree:true});
-window.tallerCerrarModal=()=>document.querySelector('#modal')?.remove();
-new MutationObserver(()=>document.querySelectorAll('[onclick*="close()"]:not([data-taller-close])').forEach(button=>{button.dataset.tallerClose='1';button.setAttribute('onclick',button.getAttribute('onclick').replaceAll('close()','tallerCerrarModal()'))})).observe(document.body,{childList:true,subtree:true});
-
-/*
- * Cuentas de empleados: las asignaciones de una pieza solo se devengan al
- * terminar la pieza. El costo de la orden sigue viviendo en part.laborCost;
- * los pagos al empleado solo reducen su saldo y nunca crean un segundo costo.
- */
-const employeeLedger=window.TallerOSLedger;
-const employeeLedgerToday=()=>new Date().toISOString().slice(0,10);
-const employeeLedgerNumber=value=>Number.isFinite(Number(value))?Number(value):0;
-const employeeLedgerDate=value=>value?String(value).slice(0,10):'Sin fecha';
-const employeeLedgerAccountLabel=account=>`Cuenta #${String(account.number||0).padStart(3,'0')}`;
-const employeeLedgerLegacyCost=part=>{
-  if(part&&part.legacyLaborCost!==undefined&&part.legacyLaborCost!==null)return employeeLedgerNumber(part.legacyLaborCost);
-  const generated=(part?.laborAssignments||[]).filter(assignment=>assignment.ledgerState==='generated').reduce((sum,assignment)=>sum+employeeLedgerNumber(assignment.total),0);
-  return Math.max(0,employeeLedgerNumber(part?.laborCost)-generated);
-};
-
-async function employeeLedgerPrepare(){
+import {TallerService} from './service.mjs';
+import {VERSION,n,round,sum,today,day,find,belongs,active,closed,cancelled,trashed,finished,balance,paid,financial,status,employeeSummary,monthly,audit,STAGES,METHODS,CATEGORIES} from './domain.mjs';
+const service=new TallerService(),app=document.querySelector('#app'),dialog=document.querySelector('#dialog');
+const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const money=x=>'RD$'+new Intl.NumberFormat('es-DO',{minimumFractionDigits:2,maximumFractionDigits:2}).format(n(x));
+const date=x=>x?day(x):'Fecha no registrada';
+const button=(label,action,id='',cls='')=>'<button type="button" class="btn '+cls+'" data-action="'+action+'" data-id="'+esc(id)+'">'+label+'</button>';
+const metric=(label,value)=>'<div class="metric"><span>'+label+'</span><strong>'+value+'</strong></div>';
+const row=(label,value)=>'<div class="row"><span>'+label+'</span><strong>'+value+'</strong></div>';
+const empty=label=>'<p class="empty">'+label+'</p>';
+const field=(label,name,value='',type='text',extra='')=>'<label class="field"><span>'+label+'</span><input name="'+name+'" type="'+type+'" value="'+esc(value)+'" '+(type==='number'?'min="0" step="0.01" inputmode="decimal" ':'')+extra+'></label>';
+const textarea=(label,name,value='')=>'<label class="field full"><span>'+label+'</span><textarea name="'+name+'" rows="3">'+esc(value)+'</textarea></label>';
+const select=(label,name,options,value,extra='')=>'<label class="field"><span>'+label+'</span><select aria-label="'+esc(label)+'" name="'+name+'" '+extra+'>'+options.map(x=>{const [v,l]=Array.isArray(x)?x:[x,x];return '<option value="'+esc(v)+'" '+(String(v)===String(value)?'selected':'')+'>'+esc(l)+'</option>';}).join('')+'</select></label>';
+let d,route='home',id='',orderTab='work',formContext={},busy=false,selectedMonth=today().slice(0,7),pendingImport=null,previousFocus;
+const names={home:'Inicio',orders:'Órdenes',production:'Producción',clients:'Clientes',more:'Más',history:'Historial',employees:'Empleados',inventory:'Inventario',monthly:'Cierre mensual',settings:'Configuración',finance:'Finanzas',trash:'Papelera'};
+const client=o=>find(d,'clients',o.clientId)||{};
+const vehicle=o=>find(d,'vehicles',o.vehicleId)||{};
+const vehicleText=o=>{const v=vehicle(o);return [v.brand,v.model,v.year].filter(Boolean).join(' ')||'Vehículo sin referencia';};
+const badge=label=>'<span class="badge">'+esc(label)+'</span>';
+function toast(message){const t=document.querySelector('#toast');t.textContent=message;t.hidden=false;clearTimeout(toast.timer);toast.timer=setTimeout(()=>t.hidden=true,5000);}
+function navigate(target){dialog.close();if(location.hash==='#'+target)render();else location.hash=target;}
+function shell(title,body,action=''){
+  const nav=[['home','⌂','Inicio'],['orders','▤','Órdenes'],['production','◇','Producción'],['clients','♙','Clientes'],['more','•••','Más']];
+  const selected=route==='order'?'orders':route==='client'?'clients':names[route]&&!['history','employees','inventory','monthly','settings','finance','trash'].includes(route)?route:'more';
+  app.innerHTML='<aside class="sidebar"><a class="brand" href="#home"><span class="brand-mark">T</span><span>Taller<span class="gold">OS</span><small>'+esc(d.settings[0]?.name||'RevivAuto')+'</small></span></a><nav>'+Object.entries(names).filter(([k])=>!['more','trash'].includes(k)).map(([k,l])=>'<a href="#'+k+'" class="'+(route===k?'on':'')+'">'+l+'</a>').join('')+'</nav><small class="version">Fase 2 · '+VERSION+'</small></aside><main><header class="top"><div><p class="eyebrow">'+esc(d.settings[0]?.name||'RevivAuto')+'</p><h1>'+esc(title)+'</h1></div>'+action+'</header>'+body+'</main><nav class="bottom" aria-label="Navegación principal">'+nav.map(([r,icon,label])=>'<a href="#'+r+'" class="'+(selected===r?'on':'')+'" '+(selected===r?'aria-current="page"':'')+'><span aria-hidden="true">'+icon+'</span>'+label+'</a>').join('')+'</nav>';
+}
+function orderCard(o,history=false){
+  const f=financial(d,o),v=vehicle(o),c=client(o);
+  return '<article class="card searchable" data-search="'+esc([o.number,c.name,c.phone,v.brand,v.model,v.year,v.plate,date(o.closedAt)].join(' ').toLocaleLowerCase())+'" data-date="'+esc(day(o.closedAt))+'"><a class="card-link" href="#order/'+o.id+'"><div class="split"><small class="gold">'+esc(o.number)+'</small>'+badge(history?date(o.closedAt):status(d,o))+'</div><h3>'+esc(vehicleText(o))+'</h3><p class="muted">'+esc(c.name||'Cliente sin referencia')+' · '+esc(v.plate||'Sin placa')+'</p>'+(history?'<div class="mini-metrics">'+metric('Facturado',money(f.revenue))+metric('Costo',money(f.costs))+metric('Ganancia',money(f.profit))+'</div>':row('Saldo pendiente',money(f.balance)))+'</a>'+(!history&&finished(d,o)&&f.balance>0?button('Cobrar saldo','pay',o.id,'compact primary'):'')+'</article>';
+}
+function searchBar(placeholder='Buscar',history=false){return '<div class="filters"><label class="search-field"><span class="sr-only">'+placeholder+'</span><input type="search" id="search" placeholder="'+placeholder+'" data-filter></label>'+(history?field('Mes','historyMonth','','month','data-filter')+field('Año','historyYear','','number','min="2000" max="2100" step="1" data-filter')+field('Desde','historyStart','','date','data-filter')+field('Hasta','historyEnd','','date','data-filter'):'')+'</div>';}
+function home(){
+  const orders=d.orders.filter(active),attention=orders.filter(o=>finished(d,o)),production=orders.filter(o=>!finished(d,o)),m=monthly(d,today().slice(0,7));
+  shell('Tu taller, hoy','<div class="metrics">'+metric('Órdenes activas',orders.length)+metric('Terminados por entregar',attention.length)+metric('Por cobrar',money(sum(d.orders.filter(o=>!cancelled(o)&&o.status!=='Cotización'),o=>balance(d,o))))+metric('Ingresos del mes',money(m.cash))+'</div><section><div class="section-title"><h2>Necesitan atención</h2><span>'+attention.length+'</span></div><div class="cards">'+(attention.map(o=>orderCard(o)).join('')||empty('No hay trabajos terminados pendientes de entrega.'))+'</div></section><section><div class="section-title"><h2>En producción</h2><a href="#production">Ver producción</a></div><div class="cards">'+(production.map(o=>orderCard(o)).join('')||empty('No hay trabajos en producción.'))+'</div></section>',button('Nueva orden','order-new','','primary'));
+}
+function orderPage(){
+  const o=find(d,'orders',id);if(!o)return shell('Orden',empty('Orden no encontrada.'));
+  const f=financial(d,o),isActive=active(o),done=finished(d,o);
+  let primary='',banner='';
+  if(closed(o))banner='<section class="status-panel"><span class="eyebrow">Orden entregada</span><h2>'+esc(date(o.closedAt))+'</h2><p>Consulta histórica. Reabre la orden para modificarla.</p>'+button('Ver factura','invoice',o.id,'primary')+'</section>';
+  else if(isActive&&done)banner='<section class="status-panel"><span class="eyebrow">Trabajo terminado</span><h2>'+(f.balance?'Saldo pendiente: '+money(f.balance):'Pago completado')+'</h2>'+button(f.balance?'Cobrar saldo':'Finalizar y entregar',f.balance?'pay':'close-order',o.id,'primary')+'</section>';
+  else if(isActive)banner='<section class="status-panel compact"><div><span class="eyebrow">'+esc(status(d,o))+'</span><h2>'+money(f.balance)+' por cobrar</h2></div>'+button('Registrar abono','pay',o.id)+'</section>';
+  else banner='<div class="notice">'+esc(status(d,o))+'. Sus movimientos se conservan.</div>';
+  const menu=button('•••','order-menu',o.id,'icon');
+  const tabs='<div class="tabs" role="group" aria-label="Detalle de orden">'+[['work','Trabajo'],['profit','Rentabilidad'],['movements','Movimientos']].map(([k,l])=>button(l,'order-tab',k,orderTab===k?'selected':'')).join('')+'</div>';
+  let body='';
+  if(orderTab==='work'){
+    const parts=d.parts.filter(p=>belongs(p,o.id));
+    body='<section><div class="section-title"><h2>Piezas y trabajos</h2>'+(isActive?button('Agregar pieza','part-new',o.id,'compact'):'')+'</div><div class="list">'+(parts.map(p=>{
+      const assignments=(p.laborAssignments||[]).map(a=>esc(find(d,'employees',a.employeeId)?.name||'Empleado')+' · '+money(a.total)+' · '+({pending:'asignado',generated:'devengado',legacy:'histórico',invalid:'revisar'}[a.ledgerState]||'revisar')).join('<br>');
+      return '<article class="card '+(p.archived?'muted':'')+'"><div class="split"><h3>'+esc(p.description)+'</h3>'+badge(p.archived?'Archivada':p.status)+'</div><p class="muted">'+(assignments||'Sin mano de obra asignada')+'</p><div class="inline-actions">'+(isActive?(p.archived?button('Restaurar','part-restore',p.id):button('Abrir pieza','part-edit',p.id)+(p.status!=='Terminada'?button('Terminar','part-finish',p.id,'compact'):'')+button('Asignar empleado','assign',p.id,'quiet')):'')+'</div></article>';
+    }).join('')||empty('Agrega las piezas o trabajos de esta orden.'))+'</div>'+(isActive&&!parts.filter(p=>!p.archived).length?button('Marcar trabajo terminado','work-finish',o.id,'quiet'):'')+'</section><section class="panel"><h2>Datos de la orden</h2>'+row('Cliente',esc(client(o).name))+row('Teléfono',esc(client(o).phone))+row('Vehículo',esc(vehicleText(o)))+row('Placa',esc(vehicle(o).plate||'Sin placa'))+row('Entrada',date(o.entryDate))+row('Entrega prevista',date(o.dueDate))+row('Precio acordado',money(f.revenue))+(o.notes?'<h3>Notas internas</h3><p>'+esc(o.notes)+'</p>':'')+(o.customerNotes?'<h3>Notas para el cliente</h3><p>'+esc(o.customerNotes)+'</p>':'')+'</section>';
+  }else if(orderTab==='profit'){
+    const costs=d.costs.filter(x=>belongs(x,o.id)),accruals=d.ledgerAccruals.filter(x=>belongs(x,o.id));
+    const allocated=d.ledgerPayments.filter(x=>!x.voided).flatMap(p=>(p.allocations||[]).filter(a=>Number(a.orderId)===Number(o.id)).map(a=>({...a,date:p.date,employeeId:p.employeeId})));
+    const accountIds=new Set(accruals.map(a=>a.accountId)),legacyPay=d.ledgerPayments.filter(p=>!p.voided&&accountIds.has(p.accountId)&&!p.allocations);
+    body='<section class="panel"><h2>Ingresos</h2>'+row('Precio del trabajo',money(f.revenue))+row('Dinero cobrado',money(f.collected))+row('Pendiente',money(f.balance))+'<h2>Costos</h2>'+row('Materiales',money(f.materials))+row('Mano de obra devengada / histórica',money(f.labor))+row('Otros costos',money(f.others))+'<div class="result">'+row('Ganancia '+(closed(o)?'neta':'sobre costos registrados'),money(f.profit))+row('Margen',f.margin+'%')+'</div>'+(f.pendingLabor?row('Mano de obra pendiente de terminar',money(f.pendingLabor))+row('Ganancia proyectada incluyéndola',money(f.projectedProfit)):'')+'<p class="help">La ganancia usa el precio acordado. Cobrado representa caja. Pagar al empleado reduce su saldo y no vuelve a sumar costos.</p></section><section class="panel"><div class="section-title"><h2>Detalle de costos</h2>'+(isActive?button('Agregar costo','cost-new',o.id,'compact'):'')+'</div>'+(costs.map(c=>'<div class="movement">'+row(esc(c.description||c.type)+(c.voided?' · Anulado':''),money(c.amount))+'<small>'+esc(c.type)+' · '+date(c.date)+'</small>'+(isActive?'<div class="inline-actions">'+(c.voided?button('Restaurar','cost-restore',c.id,'quiet'):button('Editar','cost-edit',c.id,'quiet')+button('Anular','cost-void',c.id,'quiet danger-text'))+'</div>':'')+'</div>').join('')||empty('Sin costos directos. Los costos registrados en piezas están incluidos arriba.'))+'</section><section class="panel"><h2>Mano de obra por empleado</h2>'+(accruals.map(a=>row(esc(find(d,'employees',a.employeeId)?.name)+' · '+esc(a.work),money(a.total))).join('')||empty('Sin devengos nuevos. Se conservan los costos históricos de las piezas.'))+'<h3>Pagos al empleado vinculados</h3>'+(allocated.map(p=>row(esc(find(d,'employees',p.employeeId)?.name)+' · '+date(p.date),money(p.amount))).join('')||empty('Sin pagos vinculados a esta orden.'))+(legacyPay.length?'<p class="help">Hay '+money(sum(legacyPay,p=>p.amount))+' en pagos históricos de cuentas que incluyen esta orden. No tenían desglose por orden; consulta la cuenta del empleado.</p>':'')+'</section>';
+  }else{
+    const payments=d.payments.filter(p=>belongs(p,o.id)),events=d.events.filter(e=>belongs(e,o.id)).reverse();
+    body='<section class="panel"><h2>Abonos del cliente</h2>'+(payments.map(p=>'<div class="movement">'+row(date(p.date)+' · '+esc(p.method)+(p.voided?' · Anulado':''),money(p.amount))+'<p class="muted">'+esc(p.note)+'</p>'+(isActive?'<div class="inline-actions">'+(p.voided?button('Restaurar','payment-restore',p.id,'quiet'):button('Editar','payment-edit',p.id,'quiet')+button('Anular','payment-void',p.id,'quiet danger-text'))+'</div>':'')+'</div>').join('')||empty('No hay abonos registrados.'))+'</section><section class="panel"><h2>Historial de movimientos</h2>'+(events.map(e=>'<div class="movement"><small>'+esc(new Date(e.at).toLocaleString('es-DO'))+'</small><p>'+esc(e.detail)+'</p></div>').join('')||empty('Los eventos anteriores a Fase 2 no tenían bitácora. Sus registros originales se conservan.'))+'</section><section class="panel"><h2>Comprobantes</h2>'+d.invoices.filter(i=>belongs(i,o.id)).map(i=>row(esc(i.number)+(i.supersededAt?' · Orden reabierta':''),button('Ver','invoice-id',i.id,'quiet'))).join('')+'</section>';
+  }
+  shell(o.number,'<a class="back" href="#'+(closed(o)?'history':'orders')+'">Volver a '+(closed(o)?'Historial':'Órdenes')+'</a><div class="order-heading"><h2>'+esc(vehicleText(o))+'</h2><p class="muted">'+esc(client(o).name)+' · '+esc(vehicle(o).plate||'Sin placa')+'</p></div>'+banner+tabs+body,menu);
+}
+function production(){
+  const orders=d.orders.filter(active).filter(o=>!finished(d,o));
+  shell('Producción',searchBar('Buscar vehículo, cliente o placa')+'<div class="cards">'+(orders.map(o=>{
+    const parts=d.parts.filter(p=>belongs(p,o.id)&&!p.archived),complete=parts.filter(p=>p.status==='Terminada').length;
+    return '<article class="card searchable" data-search="'+esc([o.number,vehicleText(o),client(o).name,vehicle(o).plate].join(' ').toLowerCase())+'"><a class="card-link" href="#order/'+o.id+'"><div class="split"><small class="gold">'+esc(o.number)+'</small>'+badge(status(d,o))+'</div><h3>'+esc(vehicleText(o))+'</h3><p class="muted">'+complete+' / '+parts.length+' trabajos terminados</p><progress max="'+Math.max(1,parts.length)+'" value="'+complete+'"></progress></a>'+parts.filter(p=>p.status!=='Terminada').map(p=>'<div class="row"><span>'+esc(p.description)+'<small class="muted block">'+esc(p.status)+'</small></span>'+button('Abrir','part-edit',p.id,'compact')+'</div>').join('')+'</article>';
+  }).join('')||empty('No hay trabajos pendientes en producción.'))+'</div>');
+}
+function history(){
+  const items=d.orders.filter(o=>closed(o));
+  shell('Historial',searchBar('Cliente, teléfono, vehículo, placa, REV o fecha',true)+'<div class="cards">'+(items.sort((a,b)=>String(b.closedAt||'').localeCompare(String(a.closedAt||''))).map(o=>orderCard(o,true)).join('')||empty('Las órdenes finalizadas y entregadas aparecerán aquí.'))+'</div><details class="panel"><summary>Canceladas y archivadas</summary><div class="cards">'+(d.orders.filter(o=>(cancelled(o)||o.archived)&&!closed(o)&&!trashed(o)).map(o=>orderCard(o)).join('')||empty('No hay órdenes canceladas ni archivadas.'))+'</div></details><a class="back" href="#trash">Consultar papelera</a>');
+}
+function clients(){
+  shell('Clientes',searchBar('Buscar nombre o teléfono')+'<div class="cards">'+(d.clients.map(c=>'<article class="card searchable" data-search="'+esc((c.name+' '+c.phone).toLowerCase())+'"><a class="card-link" href="#client/'+c.id+'"><div class="split"><h3>'+esc(c.name)+'</h3>'+(c.archived?badge('Archivado'):'')+'</div><p class="muted">'+esc(c.phone)+'</p>'+row('Vehículos',d.vehicles.filter(v=>Number(v.clientId)===Number(c.id)).length)+'</a></article>').join('')||empty('Crea el primer cliente para comenzar.'))+'</div>',button('Nuevo cliente','client-new','','primary'));
+}
+function clientPage(){
+  const c=find(d,'clients',id);if(!c)return;
+  const vehicles=d.vehicles.filter(v=>Number(v.clientId)===Number(c.id)),orders=d.orders.filter(o=>Number(o.clientId)===Number(c.id));
+  shell(c.name,'<a class="back" href="#clients">Volver a clientes</a><section class="panel">'+row('Teléfono',esc(c.phone))+row('WhatsApp',esc(c.whatsapp||'—'))+row('Pendiente',money(sum(orders.filter(o=>!cancelled(o)),o=>balance(d,o))))+'<div class="inline-actions">'+button(c.archived?'Restaurar cliente':'Archivar cliente',c.archived?'client-restore':'client-archive',c.id,'quiet')+'</div></section><section><div class="section-title"><h2>Vehículos</h2>'+button('Agregar vehículo','vehicle-new',c.id,'compact')+'</div><div class="cards">'+(vehicles.map(v=>'<article class="card">'+row(esc(v.brand+' '+v.model),badge(v.archived?'Archivado':v.plate||'Sin placa'))+'<div class="inline-actions">'+button('Editar','vehicle-edit',v.id,'quiet')+button(v.archived?'Restaurar':'Archivar',v.archived?'vehicle-restore':'vehicle-archive',v.id,'quiet')+'</div></article>').join('')||empty('Sin vehículos registrados.'))+'</div></section><section><h2>Órdenes</h2><div class="cards">'+orders.map(o=>orderCard(o,closed(o))).join('')+'</div></section>',button('Editar cliente','client-edit',c.id));
+}
+function employees(){
+  shell('Empleados','<div class="cards">'+(d.employees.map(e=>{const s=employeeSummary(d,e.id);return '<a class="card card-link" href="#employee/'+e.id+'"><div class="split"><h3>'+esc(e.name)+'</h3>'+badge(e.active===false?'Inactivo':e.role||'Empleado')+'</div><p class="muted">'+s.pieces+' piezas terminadas · '+s.pending+' asignadas pendientes</p>'+row('Devengado',money(s.generated))+row('Pagado',money(s.paid))+row('Por pagar',money(s.balance))+'</a>';}).join('')||empty('Agrega empleados y asígnalos a las piezas.'))+'</div>',button('Agregar empleado','employee-new','','primary'));
+}
+function employeePage(){
+  const e=find(d,'employees',id);if(!e)return;
+  const s=employeeSummary(d,id),accounts=d.ledgerAccounts.filter(a=>Number(a.employeeId)===Number(id));
+  shell(e.name,'<a class="back" href="#employees">Volver a empleados</a><div class="metrics">'+metric('Piezas terminadas',s.pieces)+metric('Devengado',money(s.generated))+metric('Pagado',money(s.paid))+metric('Por pagar',money(s.balance))+'</div><section><h2>Cuentas</h2><div class="cards">'+(accounts.map(a=>'<article class="card"><div class="split"><h3>Cuenta '+a.number+'</h3>'+badge(a.status)+'</div>'+row('Devengado',money(a.generated))+row('Pendiente',money(a.balance))+(a.status!=='CERRADA'&&n(a.balance)>0?button('Registrar pago','employee-pay',a.id,'primary'):a.status==='PAGADA'?button('Cerrar cuenta pagada','account-close',a.id):'')+'</article>').join('')||empty('La cuenta se crea al terminar el primer trabajo asignado.'))+'</div></section><section class="panel"><h2>Trabajos asignados y terminados</h2>'+(s.assignments.map(a=>row(esc(find(d,'parts',a.partId)?.description||a.work)+' · '+esc(find(d,'orders',a.orderId)?.number)+'<small class="block muted">'+esc({pending:'Pendiente de terminar',generated:'Devengado',legacy:'Histórico sin nueva deuda'}[a.ledgerState]||a.ledgerState)+'</small>',money(a.total))).join('')||empty('Sin trabajos asignados.'))+'</section><section class="panel"><h2>Historial de pagos</h2>'+(d.ledgerPayments.filter(p=>Number(p.employeeId)===Number(e.id)).map(p=>'<div class="movement">'+row(date(p.date)+' · '+esc(p.method||'No registrado')+(p.voided?' · Anulado':''),money(p.amount))+'<p class="muted">'+esc(p.note)+'</p>'+(!p.voided&&find(d,'ledgerAccounts',p.accountId)?.status!=='CERRADA'?'<div class="inline-actions">'+button('Editar','employee-payment-edit',p.id,'quiet')+button('Anular','employee-payment-void',p.id,'quiet danger-text')+'</div>':'')+'</div>').join('')||empty('Terminar el trabajo genera el devengo; el pago se registra aquí por separado.'))+'</section>',button('Editar','employee-edit',e.id));
+}
+function inventory(){
+  const low=d.inventory.filter(p=>n(p.quantity)<=n(p.minimum));
+  shell('Inventario',(low.length?'<div class="notice">'+low.length+' productos con stock bajo.</div>':'')+searchBar('Buscar producto o categoría')+'<div class="cards">'+(d.inventory.map(p=>'<a class="card card-link searchable" data-search="'+esc((p.name+' '+p.category).toLowerCase())+'" href="#product/'+p.id+'"><div class="split"><h3>'+esc(p.name)+'</h3>'+badge(n(p.quantity)<=n(p.minimum)?'Stock bajo':p.category)+'</div>'+row('Existencia',n(p.quantity)+' '+esc(p.unit))+row('Valor aproximado',money(n(p.quantity)*n(p.unitCost)))+'</a>').join('')||empty('Registra tus materiales y sus movimientos.'))+'</div>',button('Nuevo producto','product-new','','primary'));
+}
+function productPage(){
+  const p=find(d,'inventory',id);if(!p)return;
+  shell(p.name,'<a class="back" href="#inventory">Volver a inventario</a><div class="metrics">'+metric('Cantidad',n(p.quantity)+' '+esc(p.unit))+metric('Costo unitario',money(p.unitCost))+metric('Valor aproximado',money(n(p.quantity)*n(p.unitCost)))+metric('Stock mínimo',n(p.minimum))+'</div><div class="inline-actions">'+button('Entrada','inventory-entry',p.id,'primary')+button('Salida','inventory-exit',p.id)+button('Ajuste','inventory-adjustment',p.id)+'</div><section class="panel">'+row('Categoría',esc(p.category))+row('Proveedor',esc(p.supplier||'—'))+row('Última compra',date(p.lastPurchaseDate))+'<p>'+esc(p.notes)+'</p></section><section class="panel"><h2>Historial de movimientos</h2>'+d.inventoryMoves.filter(m=>m.productId===p.id).reverse().map(m=>'<div class="movement">'+row(({entry:'Entrada',exit:'Salida',adjustment:'Ajuste'}[m.kind])+' · '+date(m.date),(m.delta>0?'+':'')+m.delta+' '+esc(p.unit))+'<p class="muted">'+esc(m.note)+' · Stock final: '+m.after+'</p></div>').join('')+'<p class="help">Las salidas todavía no crean costos en órdenes. Registra el consumo de cada trabajo en su rentabilidad.</p></section>',button('Editar producto','product-edit',p.id));
+}
+function monthPage(){
+  const snapshot=d.monthlyClosures.find(x=>x.month===selectedMonth),m=snapshot?.metrics||monthly(d,selectedMonth);
+  shell('Cierre mensual','<div class="filters">'+field('Período','period',selectedMonth,'month')+'</div>'+(snapshot?'<div class="notice">Mes cerrado el '+date(snapshot.closedAt)+'. Estás viendo la instantánea guardada.</div>':'<p class="help">Período abierto. '+esc(m.basis)+'</p>')+'<div class="metrics">'+metric('Total vendido',money(m.sold))+metric('Realmente cobrado',money(m.cash))+metric('Por cobrar al cierre',money(m.receivables))+metric('Ganancia del período',money(m.profit))+'</div><div class="cards"><section class="panel"><h2>Costos y resultado</h2>'+row('Materiales',money(m.materials))+row('Mano de obra',money(m.labor))+row('Otros gastos',money(m.others))+row('Costos del período',money(m.costs))+row('Margen',m.margin+'%')+'</section><section class="panel"><h2>Operación</h2>'+row('Órdenes abiertas en el mes',m.opened)+row('Órdenes cerradas / entregas',m.closed)+row('Vehículos distintos entregados',m.vehicles)+row('Piezas terminadas con fecha',m.pieces)+'</section><section class="panel"><h2>Empleados</h2>'+row('Devengado en el mes',money(m.generated))+row('Pagado en el mes',money(m.employeePaid))+row('Saldo acumulado al cierre',money(m.employeeBalance))+'</section><section class="panel"><h2>Inventario</h2>'+row('Compras del mes',money(m.purchases))+row('Consumo registrado',money(m.consumption))+'<p class="help">Compras no equivale a costo consumido en los trabajos.</p></section></div>'+(m.undatedCount||m.undatedClosures?'<div class="notice">'+m.undatedCount+' costos históricos sin fecha ('+money(m.undatedCosts)+') y '+m.undatedClosures+' cierres sin fecha real. Se conservan en el historial y no se asignan a un mes inventado. El resultado mensual puede estar incompleto.</div>':'')+(!snapshot?button('Cerrar mes y guardar instantánea','month-close',selectedMonth):''));
+}
+function settings(){
+  const s=d.settings[0],issues=audit(d);
+  shell('Configuración','<section class="panel"><h2>Datos del taller</h2><form data-form="settings" class="form">'+field('Nombre del taller','name',s.name,'text','required')+field('Teléfono','phone',s.phone,'tel')+field('WhatsApp','whatsapp',s.whatsapp,'tel')+field('Correo','email',s.email,'email')+field('Dirección','address',s.address)+field('RNC / Cédula','document',s.document)+field('Prefijo de órdenes','prefix',s.prefix)+field('Tarifa de referencia del pintor','painterRate',s.painterRate||350,'number')+'<div class="full"><button class="btn primary">Guardar datos</button></div></form><h3>Logo</h3>'+(s.logoData?'<img class="logo-preview" src="'+esc(s.logoData)+'" alt="Logo del taller">':'')+'<label class="field"><span>Subir logo (PNG, JPG o WEBP · máximo 2 MB)</span><input type="file" id="logo" accept="image/png,image/jpeg,image/webp"></label></section><section class="panel"><h2>Copias de seguridad</h2><p class="help">Tus datos se guardan en este navegador y esta dirección. Exporta una copia antes de cambiar de dispositivo o borrar datos del navegador.</p><div class="inline-actions">'+button('Exportar todos los datos','export','','primary')+button('Importar copia','import')+'</div><input type="file" id="backup-file" accept=".json,application/json" hidden><h3>Recuperación</h3><p>'+d.snapshots.length+' instantáneas locales conservadas.</p>'+button('Descargar recuperación inicial','recovery','','quiet')+'</section><section class="panel"><h2>Revisión de datos</h2>'+(issues.length?issues.map(x=>'<p class="notice">'+esc(x.message)+' · Registro '+esc(x.id)+'</p>').join(''):'<p>No se detectaron referencias rotas, números repetidos ni excesos de cobro en la revisión automática.</p>')+'</section><section class="panel"><h2>TallerOS '+VERSION+'</h2><p>Dirección actual</p><p class="url">'+esc(location.origin+location.pathname)+'</p>'+button('Instalar en el teléfono','install')+'</section>');
+}
+function invoiceMarkup(i){
+  return '<article class="receipt"><header class="receipt-header">'+(i.workshop.logoData?'<img src="'+esc(i.workshop.logoData)+'" alt="Logo">':'')+'<div><h1>'+esc(i.workshop.name||'RevivAuto')+'</h1><p>'+esc(i.workshop.address)+'</p><p>'+esc(i.workshop.phone)+'</p></div><div><strong>COMPROBANTE INTERNO</strong><p>'+esc(i.number)+'</p><p>Orden '+esc(i.orderNumber)+'</p><p>'+date(i.issuedAt)+'</p></div></header><hr><h2>'+esc(i.client.name)+'</h2><p>'+esc(i.client.phone)+'</p><p>'+esc([i.vehicle.brand,i.vehicle.model,i.vehicle.year].filter(Boolean).join(' '))+' · '+esc(i.vehicle.plate||'Sin placa')+'</p><h2>Trabajos realizados</h2><ul>'+i.works.map(w=>'<li>'+esc(w.description)+'</li>').join('')+'</ul>'+row('Precio total',money(i.total))+'<h2>Abonos y pago final</h2>'+i.payments.map(p=>row((p.final?'Pago final':'Abono')+' · '+date(p.date)+' · '+esc(p.method),money(p.amount))).join('')+'<div class="receipt-total">'+row('Total pagado',money(i.paid))+row('Balance',money(i.balance))+'</div>'+row('Fecha de entrada',date(i.entryDate))+row('Fecha de entrega',date(i.closedAt))+(i.notes?'<p>'+esc(i.notes)+'</p>':'')+(i.supersededAt?'<p>Esta orden fue reabierta después de emitir este comprobante.</p>':'')+'<footer>Comprobante interno de servicio y pago · No es un comprobante fiscal.</footer></article>';
+}
+function showInvoice(i){if(!i)return toast('La orden histórica no tenía comprobante. Reabrir y cerrar requiere revisar sus datos.');formContext={invoice:i};openDialog('Comprobante del cliente',invoiceMarkup(i)+'<div class="dialog-actions">'+button('Compartir','invoice-share',i.id,'primary')+button('Imprimir / PDF','invoice-print',i.id)+button('Descargar','invoice-download',i.id)+'</div>',null,{},false);}
+function openDialog(title,body,type=null,context={},submit='Guardar'){
+  previousFocus=document.activeElement;formContext={...context,invoice:context.invoice||formContext.invoice};
+  dialog.innerHTML='<div class="dialog-top"><h2>'+esc(title)+'</h2>'+button('×','dialog-close','','icon')+'</div>'+(type?'<form class="form" data-form="'+type+'">'+body+'<p class="form-error full" role="alert"></p><div class="dialog-actions full">'+button('Cancelar','dialog-close')+'<button class="btn primary">'+submit+'</button></div></form>':body);
+  if(!dialog.open)dialog.showModal();
+}
+function confirmAction(title,message,action,target,label='Confirmar'){
+  openDialog(title,'<p>'+message+'</p><div class="dialog-actions">'+button('Cancelar','dialog-close')+button(label,action,target,'primary')+'</div>');
+}
+function paymentForm(orderId,paymentId){
+  const o=find(d,'orders',orderId),p=paymentId?find(d,'payments',paymentId):{};
+  openDialog('Cobrar · '+o.number,'<p class="full help">Saldo pendiente: '+money(balance(d,o))+'</p>'+field('Monto recibido','amount',p.amount??balance(d,o),'number','required')+select('Método de pago','method',METHODS,p.method||'Efectivo')+field('Fecha','date',p.date||today(),'date','required')+textarea('Nota opcional','note',p.note),'payment',{orderId:o.id,id:paymentId},'Guardar pago');
+}
+function orderForm(orderId){
+  const o=orderId?find(d,'orders',orderId):{};
+  const cs=d.clients.filter(c=>!c.archived||c.id===o.clientId),cId=o.clientId||cs[0]?.id;
+  openDialog(orderId?'Editar '+o.number:'Nueva orden',select('Cliente','clientId',cs.map(c=>[c.id,c.name]),cId,'required')+select('Vehículo','vehicleId',[['','Seleccionar'],...d.vehicles.filter(v=>v.clientId===Number(cId)&&(!v.archived||v.id===o.vehicleId)).map(v=>[v.id,[v.brand,v.model,v.plate].filter(Boolean).join(' · ')])],o.vehicleId,'required')+'<div class="inline-actions full">'+button('Nuevo cliente','client-new','','quiet')+button('Agregar vehículo','vehicle-from-order','','quiet')+'</div>'+field('Precio acordado','total',o.total||0,'number','required')+field('Fecha de entrada','entryDate',o.entryDate||today(),'date','required')+field('Entrega prevista','dueDate',o.dueDate,'date')+textarea('Notas internas (no salen en factura)','notes',o.notes)+textarea('Notas para el cliente','customerNotes',o.customerNotes),'order',{id:orderId},'Guardar orden');
+}
+function partForm(partId,orderId){
+  const p=partId?find(d,'parts',partId):{};
+  openDialog(partId?'Pieza / trabajo':'Agregar pieza',field('Descripción','description',p.description,'text','required')+select('Proceso','status',STAGES,p.status||'Pendiente')+select('Responsable de producción','employeeId',[['','Sin asignar'],...d.employees.filter(e=>e.active!==false||e.id===p.employeeId).map(e=>[e.id,e.name])],p.employeeId)+field('Precio de referencia de la pieza','price',p.price||0,'number')+'<p class="help full">El responsable de producción no genera un pago por sí solo. Usa “Asignar empleado” para registrar la mano de obra.</p>'+(partId?button('Archivar pieza','part-archive',p.id,'quiet danger-text'):''),'part',{id:partId,orderId:p.orderId||orderId},'Guardar pieza');
+}
+function costForm(orderId,costId){
+  const c=costId?find(d,'costs',costId):{};
+  openDialog(costId?'Editar costo':'Agregar costo',select('Tipo','type',['Materiales','Otros costos',...(c.type==='Mano de obra'?['Mano de obra']:[])],c.type||'Materiales')+field('Concepto','description',c.description||c.concept,'text','required')+field('Monto total','amount',c.amount,'number','required')+field('Cantidad','quantity',c.quantity||1,'number','required')+field('Fecha del costo','date',c.date||today(),'date','required'),'cost',{orderId,id:costId},'Guardar costo');
+}
+function employeeForm(employeeId){
+  const e=employeeId?find(d,'employees',employeeId):{};
+  openDialog(employeeId?'Editar empleado':'Agregar empleado',field('Nombre','name',e.name,'text','required')+field('Teléfono','phone',e.phone,'tel')+field('Puesto','role',e.role,'text','required list="roles"')+'<datalist id="roles">'+['Desabollador','Preparador','Empapelador/Desarmador','Pintor','Brillador',...(d.settings[0].customRoles||[])].map(r=>'<option value="'+esc(r)+'">').join('')+'</datalist>'+field('Tarifa por pieza','pieceRate',e.pieceRate||0,'number')+field('Pago fijo de referencia','fixedPay',e.fixedPay||0,'number')+select('Estado','active',[['true','Activo'],['false','Inactivo']],String(e.active!==false)),'employee',{id:employeeId},'Guardar empleado');
+}
+function clientForm(clientId){
+  const c=clientId?find(d,'clients',clientId):{};
+  openDialog(clientId?'Editar cliente':'Nuevo cliente',field('Nombre completo','name',c.name,'text','required autocomplete="name"')+field('Teléfono','phone',c.phone,'tel','required autocomplete="tel"')+field('WhatsApp','whatsapp',c.whatsapp,'tel')+'<details class="full"><summary>Más datos</summary>'+field('Cédula / RNC','document',c.document)+field('Dirección','address',c.address)+textarea('Notas','notes',c.notes)+'</details>','client',{id:clientId},'Guardar cliente');
+}
+function vehicleForm(vehicleId,clientId){
+  const v=vehicleId?find(d,'vehicles',vehicleId):{};
+  openDialog(vehicleId?'Editar vehículo':'Agregar vehículo',select('Cliente','clientId',d.clients.filter(c=>!c.archived||c.id===v.clientId).map(c=>[c.id,c.name]),v.clientId||clientId)+field('Marca','brand',v.brand,'text','required')+field('Modelo','model',v.model,'text','required')+field('Año','year',v.year,'number','min="1900" max="2100" step="1"')+field('Placa','plate',v.plate)+field('Color','color',v.color)+'<details class="full"><summary>Más datos</summary>'+field('VIN','vin',v.vin)+textarea('Notas','notes',v.notes)+'</details>','vehicle',{id:vehicleId},'Guardar vehículo');
+}
+function productForm(productId){
+  const p=productId?find(d,'inventory',productId):{};
+  openDialog(productId?'Editar producto':'Nuevo producto',field('Producto','name',p.name,'text','required')+select('Categoría','category',CATEGORIES,p.category||'Pintura')+field('Unidad (litro, unidad, galón…)','unit',p.unit||'unidad','text','required')+(!productId?field('Cantidad inicial','quantity',0,'number'):'')+field('Costo unitario','unitCost',p.unitCost||0,'number',productId&&p.quantity?'readonly':'')+field('Stock mínimo','minimum',p.minimum||0,'number')+field('Proveedor opcional','supplier',p.supplier)+textarea('Notas','notes',p.notes),'product',{id:productId},'Guardar producto');
+}
+function filterCards(){
+  const term=(document.querySelector('#search')?.value||'').trim().toLocaleLowerCase(),val=name=>document.querySelector('[name="'+name+'"]')?.value||'';
+  for(const card of document.querySelectorAll('.searchable')){
+    const date=card.dataset.date||'';
+    card.hidden=!(card.dataset.search||'').includes(term)||(val('historyMonth')&&!date.startsWith(val('historyMonth')))||(val('historyYear')&&!date.startsWith(val('historyYear')))||(val('historyStart')&&date<val('historyStart'))||(val('historyEnd')&&(!date||date>val('historyEnd')));
+  }
+}
+async function render(){
+  d=await service.state();[route,id]=location.hash.slice(1).split('/');route ||= 'home';
+  if(route==='home')home();else if(route==='orders')shell('Órdenes',searchBar('Buscar REV, cliente, vehículo o placa')+'<div class="cards">'+(d.orders.filter(active).map(o=>orderCard(o)).join('')||empty('No hay órdenes activas.'))+'</div>',button('Nueva orden','order-new','','primary'));
+  else if(route==='order')orderPage();else if(route==='production')production();else if(route==='history')history();else if(route==='clients')clients();else if(route==='client')clientPage();else if(route==='employees')employees();else if(route==='employee')employeePage();else if(route==='inventory')inventory();else if(route==='product')productPage();else if(route==='monthly')monthPage();else if(route==='settings')settings();
+  else if(route==='finance')shell('Finanzas','<p class="help">Precio acordado, dinero cobrado y costos se consultan en una única vista de rentabilidad dentro de cada orden.</p><div class="cards">'+d.orders.filter(o=>!trashed(o)).map(o=>orderCard(o,closed(o))).join('')+'</div>');
+  else if(route==='trash')shell('Papelera','<div class="cards">'+(d.orders.filter(trashed).map(o=>'<article class="card"><h3>'+esc(o.number)+'</h3><p>'+esc(vehicleText(o))+'</p>'+button('Ver detalle conservado','open-order',o.id)+button('Restaurar','order-restore',o.id)+'</article>').join('')||empty('No hay órdenes en papelera.'))+'</div>');
+  else shell('Más','<div class="more-grid">'+['history','employees','inventory','monthly','finance','settings','trash'].map(r=>'<a class="card card-link" href="#'+r+'"><h2>'+names[r]+'</h2></a>').join('')+'</div>');
+}
+function download(name,content,type='application/json'){const url=URL.createObjectURL(new Blob([content],{type})),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),5000);}
+function invoiceDocument(i){return '<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>'+esc(i.number)+'</title><style>body{font:16px/1.5 system-ui;color:#111;background:white;max-width:780px;margin:30px auto;padding:20px}h1{font-size:26px}h2{font-size:18px}img{max-width:110px;max-height:80px}.receipt-header{display:flex;gap:24px;flex-wrap:wrap;justify-content:space-between}.row{display:flex;justify-content:space-between;gap:20px;padding:10px 0;border-bottom:1px solid #ddd}.receipt-total{font-size:19px;margin-top:15px}footer{font-size:12px;margin-top:32px;color:#555}@media print{body{margin:0;padding:12mm}.receipt-header{break-inside:avoid}.row{break-inside:avoid}}@page{size:auto;margin:12mm}</style>'+invoiceMarkup(i)+'</html>';}
+async function handleAction(action,target){
+  if(action==='dialog-close'){dialog.close();return;}
+  if(action==='order-new'){orderForm();return;}
+  if(action==='order-edit'){orderForm(target);return;}
+  if(action==='order-tab'){orderTab=target;orderPage();return;}
+  if(action==='open-order'){navigate('order/'+target);return;}
+  if(action==='order-menu'){
+    const o=find(d,'orders',target);
+    openDialog('Opciones · '+o.number,'<div class="menu-list">'+(active(o)?button('Editar orden','order-edit',o.id)+button('Cancelar orden','order-cancel',o.id,'danger-text')+button('Eliminar orden vacía','order-trash',o.id,'danger-text'):closed(o)||cancelled(o)||o.archived?button('Reabrir orden','order-reopen',o.id):'')+'</div>');return;
+  }
+  if(action==='client-new'||action==='client-edit'){clientForm(action==='client-edit'?target:null);return;}
+  if(action==='vehicle-new'||action==='vehicle-edit'){vehicleForm(action==='vehicle-edit'?target:null,action==='vehicle-new'?target:null);return;}
+  if(action==='vehicle-from-order'){const c=dialog.querySelector('[name="clientId"]')?.value;vehicleForm(null,c);return;}
+  if(action==='employee-new'||action==='employee-edit'){employeeForm(action==='employee-edit'?target:null);return;}
+  if(action==='part-new'||action==='part-edit'){partForm(action==='part-edit'?target:null,action==='part-new'?target:null);return;}
+  if(action==='pay'){paymentForm(target);return;}
+  if(action==='payment-edit'){const p=find(d,'payments',target);paymentForm(p.orderId,p.id);return;}
+  if(action==='cost-new'||action==='cost-edit'){const c=action==='cost-edit'?find(d,'costs',target):null;costForm(c?.orderId||target,c?.id);return;}
+  if(action==='assign'){
+    const p=find(d,'parts',target),employees=d.employees.filter(e=>e.active!==false);
+    openDialog('Asignar empleado · '+p.description,select('Empleado','employeeId',employees.map(e=>[e.id,e.name]),employees[0]?.id,'required')+select('Forma de pago','mode',['Por pieza','Monto fijo'],'Por pieza')+field('Cantidad de piezas','quantity',1,'number','required')+field('Tarifa por pieza / monto','rate',employees[0]?.pieceRate||0,'number','required')+field('Trabajo','work',p.description),'assign',{partId:p.id},'Guardar asignación');return;
+  }
+  if(action==='employee-pay'||action==='employee-payment-edit'){
+    const p=action==='employee-payment-edit'?find(d,'ledgerPayments',target):{},a=find(d,'ledgerAccounts',p.accountId||target);
+    openDialog('Pago al empleado','<p class="full help">Saldo: '+money(a.balance)+'</p>'+field('Monto','amount',p.amount||a.balance,'number','required')+select('Método','method',METHODS,p.method||'Efectivo')+field('Fecha','date',p.date||today(),'date','required')+textarea('Nota','note',p.note),'employee-payment',{accountId:a.id,id:p.id},'Guardar pago');return;
+  }
+  if(action==='close-order'){
+    const o=find(d,'orders',target);
+    confirmAction('Finalizar y entregar','<div class="summary">'+row('Cliente',esc(client(o).name))+row('Vehículo',esc(vehicleText(o)))+row('Orden',esc(o.number))+row('Precio total',money(o.total))+row('Total pagado',money(paid(d,o.id)))+row('Balance',money(balance(d,o)))+row('Entrada',date(o.entryDate))+row('Entrega',today())+'<h3>Trabajos realizados</h3><ul>'+d.parts.filter(p=>belongs(p,o.id)&&!p.archived).map(p=>'<li>'+esc(p.description)+'</li>').join('')+'</ul></div>','close-order-confirm',o.id,'Finalizar orden');return;
+  }
+  if(action==='close-order-confirm'){const invoice=await service.closeOrder(target);await render();showInvoice(invoice);toast('Orden entregada y enviada al Historial.');return;}
+  if(action==='invoice'){const o=find(d,'orders',target);showInvoice(find(d,'invoices',o.invoiceId));return;}
+  if(action==='invoice-id'){showInvoice(find(d,'invoices',target));return;}
+  if(action==='invoice-download'){const i=find(d,'invoices',target);download(i.number+'.html',invoiceDocument(i),'text/html');return;}
+  if(action==='invoice-print'){
+    const i=find(d,'invoices',target),iframe=document.createElement('iframe');iframe.className='print-frame';iframe.title='Impresión de comprobante';
+    iframe.srcdoc=invoiceDocument(i);document.body.appendChild(iframe);iframe.onload=()=>{iframe.contentWindow.focus();iframe.contentWindow.print();};setTimeout(()=>iframe.remove(),120000);return;
+  }
+  if(action==='invoice-share'){
+    const i=find(d,'invoices',target),file=new File([invoiceDocument(i)],i.number+'.html',{type:'text/html'});
+    if(navigator.canShare?.({files:[file]})){await navigator.share({title:i.number,files:[file]});}
+    else if(navigator.share){await navigator.share({title:i.number,text:i.workshop.name+' · '+i.number+'\n'+i.client.name+'\n'+i.works.map(w=>w.description).join('\n')+'\nTotal pagado: '+money(i.paid)+'\nBalance: '+money(i.balance)});}
+    else {download(i.number+'.html',invoiceDocument(i),'text/html');toast('Comprobante descargado para adjuntarlo y compartirlo.');}return;
+  }
+  if(action==='product-new'||action==='product-edit'){productForm(action==='product-edit'?target:null);return;}
+  if(action.startsWith('inventory-')){
+    const kind=action.slice(10),p=find(d,'inventory',target);
+    openDialog({entry:'Entrada',exit:'Salida',adjustment:'Ajuste'}[kind]+' · '+p.name,field(kind==='adjustment'?'Nueva cantidad total':'Cantidad','quantity',kind==='adjustment'?p.quantity:'','number','required')+(kind==='entry'?field('Costo unitario de compra','unitCost',p.unitCost,'number','required'):'')+field('Fecha','date',today(),'date','required')+textarea('Nota / motivo','note'),'inventory-move',{id:p.id,kind},'Guardar movimiento');return;
+  }
+  const confirmMap={
+    'part-finish':['Terminar trabajo','Se registrará el trabajo terminado y su mano de obra devengada. El pago al empleado y la entrega del vehículo quedan pendientes.','part-finish-confirm','Terminar trabajo'],
+    'work-finish':['Trabajo terminado','Confirma que terminaste los trabajos sin piezas registradas. La orden todavía deberá cobrarse y entregarse.','work-finish-confirm','Marcar terminado'],
+    'order-reopen':['Reabrir orden','Permitirás editar nuevamente esta orden. Su comprobante anterior y movimientos se conservan.','order-reopen-confirm','Reabrir orden'],
+    'order-cancel':['Cancelar orden','La orden saldrá de la operación. Sus cobros, costos y mano de obra se conservarán.','order-cancel-confirm','Cancelar orden'],
+    'order-trash':['Eliminar orden vacía','Solo se permite enviar a papelera órdenes sin piezas, pagos ni costos. Podrás restaurarla.','order-trash-confirm','Enviar a papelera'],
+    'account-close':['Cerrar cuenta','La cuenta pagada quedará bloqueada para conservar su historial.','account-close-confirm','Cerrar cuenta'],
+    'month-close':['Cerrar mes','Guardarás una instantánea del mes '+esc(target)+'. Incluye las advertencias de datos sin fecha y no cambiará con ediciones posteriores.','month-close-confirm','Guardar cierre'],
+    'payment-void':['Anular abono','El registro se conserva; dejará de reducir el saldo.','payment-void-confirm','Anular abono'],
+    'cost-void':['Anular costo','El registro se conserva; dejará de afectar la rentabilidad.','cost-void-confirm','Anular costo'],
+    'employee-payment-void':['Anular pago','El saldo del empleado volverá a quedar pendiente. No cambia el costo del trabajo.','employee-payment-void-confirm','Anular pago'],
+    'part-archive':['Archivar pieza','La pieza sale del trabajo pendiente. Sus costos y asignaciones se conservan.','part-archive-confirm','Archivar pieza']
+  };
+  if(confirmMap[action]){const [title,body,next,label]=confirmMap[action];confirmAction(title,body,next,target,label);return;}
+  const mutations={
+    'part-finish-confirm':()=>service.finishPart(target),'work-finish-confirm':()=>service.markFinished(target),
+    'order-reopen-confirm':()=>service.reopen(target),'order-cancel-confirm':()=>service.cancel(target),'order-trash-confirm':()=>service.trash(target),'order-restore':()=>service.restoreOrder(target),
+    'account-close-confirm':()=>service.closeAccount(target),'month-close-confirm':()=>service.closeMonth(target),
+    'payment-void-confirm':()=>service.voidMovement('payments',target),'payment-restore':()=>service.voidMovement('payments',target,true),
+    'cost-void-confirm':()=>service.voidMovement('costs',target),'cost-restore':()=>service.voidMovement('costs',target,true),
+    'employee-payment-void-confirm':()=>service.voidMovement('ledgerPayments',target),
+    'part-archive-confirm':()=>service.archive('parts',target),'part-restore':()=>service.archive('parts',target,true),
+    'client-archive':()=>service.archive('clients',target),'client-restore':()=>service.archive('clients',target,true),
+    'vehicle-archive':()=>service.archive('vehicles',target),'vehicle-restore':()=>service.archive('vehicles',target,true)
+  };
+  if(mutations[action]){await mutations[action]();dialog.close();await render();toast('Cambios guardados.');return;}
+  if(action==='export'){download('TallerOS-copia-'+today()+'.json',JSON.stringify(await service.storage.export(),null,2));toast('Copia completa descargada.');return;}
+  if(action==='recovery'){const s=d.snapshots.find(s=>s.id==='before-phase2');if(s)download('TallerOS-recuperacion-antes-fase2.json',JSON.stringify({format:'TallerOS-backup',version:1,workshopId:1,main:s.payload.main,ledger:{accounts:s.payload.ledger.accounts||[],accruals:s.payload.ledger.accruals||[],payments:s.payload.ledger.payments||[]}},null,2));return;}
+  if(action==='import'){document.querySelector('#backup-file').click();return;}
+  if(action==='import-confirm'){await service.storage.import(pendingImport);pendingImport=null;dialog.close();await render();toast('Copia importada. Se conservó una recuperación previa.');return;}
+  if(action==='install'){openDialog('Instalar TallerOS','<p>En iPhone abre esta dirección en Safari, toca Compartir y luego “Añadir a pantalla de inicio”. En Android usa “Instalar aplicación” en el menú del navegador.</p><p class="help">La instalación y los datos pertenecen a este dispositivo. Guarda una copia antes de cambiarlo.</p>');}
+}
+document.addEventListener('click',async event=>{
+  const control=event.target.closest('[data-action]');if(!control||busy)return;
+  busy=true;control.disabled=true;
+  try{await handleAction(control.dataset.action,control.dataset.id);}catch(error){if(error.name!=='AbortError')toast(error.message);}
+  finally{busy=false;if(control.isConnected)control.disabled=false;}
+});
+document.addEventListener('submit',async event=>{
+  const form=event.target;if(!form.dataset.form)return;event.preventDefault();if(busy)return;busy=true;
+  const submit=form.querySelector('button[type="submit"],button:not([type])');if(submit)submit.disabled=true;
+  const v=Object.fromEntries(new FormData(form)),c=formContext;
   try{
-    await init();
-    await employeeLedger.prepareMigration();
-    window.__employeeLedgerReady=true;
-  }catch(error){
-    window.__employeeLedgerMigrationError=error?.message||'No se pudo preparar las cuentas de empleados.';
-    console.error('TallerOS: migración de cuentas de empleados',error);
-  }
-}
-const employeeLedgerMigration=employeeLedgerPrepare();
-async function employeeLedgerEnsureReady(){
-  await employeeLedgerMigration;
-  if(window.__employeeLedgerMigrationError)throw new Error(window.__employeeLedgerMigrationError);
-}
-
-async function employeeLedgerFinalizePart(part){
-  if(part.status!=='Terminada'||!Array.isArray(part.laborAssignments)||!part.laborAssignments.length)return part;
-  const order=await api.get('orders',part.orderId);
-  if(!order)throw new Error('No se encontró la orden de esta pieza.');
-  return employeeLedger.finalizePart(part,order);
-}
-
-/* Conserva costos, materiales y asignaciones al editar una pieza existente. */
-const employeeLedgerSaveBefore=window.save;
-window.save=async function(event){
-  const form=event?.target;
-  const formData=form?new FormData(form):null;
-  if(!formData||formData.get('kind')!=='part')return employeeLedgerSaveBefore(event);
-  event.preventDefault();
-  try{
-    await employeeLedgerEnsureReady();
-    const values=Object.fromEntries(formData);
-    if(!values.description?.trim())throw new Error('Describe la pieza o trabajo.');
-    if(!values.orderId||!Number.isFinite(Number(values.orderId)))throw new Error('Selecciona una orden válida para esta pieza.');
-    const existing=values.id?await api.get('parts',Number(values.id)):null;
-    let part={
-      ...(existing||{}),
-      workshopId:WID,
-      id:existing?.id,
-      orderId:Number(values.orderId),
-      description:values.description.trim(),
-      status:values.status||'Pendiente',
-      employeeId:values.employeeId?Number(values.employeeId):null,
-      price:employeeLedgerNumber(values.price),
-      materialCost:employeeLedgerNumber(existing?.materialCost),
-      laborCost:employeeLedgerNumber(existing?.laborCost),
-      legacyLaborCost:employeeLedgerLegacyCost(existing),
-      otherCost:employeeLedgerNumber(existing?.otherCost),
-      laborAssignments:Array.isArray(existing?.laborAssignments)?existing.laborAssignments:[]
-    };
-    const savedId=await api.put('parts',part);
-    part={...part,id:part.id||savedId};
-    part=await employeeLedgerFinalizePart(part);
-    await api.put('parts',part);
-    close();
-    await render();
-    await orderModal(part.orderId);
-  }catch(error){
-    alert(`No se pudo guardar la pieza: ${error.message}`);
-  }
-};
-
-async function employeeLedgerShowPartsInOrder(orderId){
-  const form=document.querySelector('#modal form input[name="kind"][value="order"]')?.closest('form');
-  if(!form||form.dataset.employeeLedgerParts)return;
-  form.dataset.employeeLedgerParts='1';
-  const d=await data();
-  const parts=d.parts.filter(part=>part.orderId===Number(orderId));
-  const partRows=parts.map(part=>{
-    const assignments=(part.laborAssignments||[]).map(assignment=>{
-      const employee=d.employees.find(item=>item.id===Number(assignment.employeeId));
-      const state=assignment.ledgerState==='generated'?'devengado':assignment.ledgerState==='pending'?'pendiente de terminar':assignment.ledgerState==='legacy'?'histórico':'';
-      return `${esc(employee?.name||'Empleado sin registro')} · ${esc(state)}`;
-    }).join('<br>')||'Sin empleados asignados';
-    const finishAction=part.status==='Terminada'?'<span class="muted">Terminada</span>':`<button type="button" class="btn primary" onclick="employeeLedgerMarkPartFinished(${part.id})">Marcar terminada</button>`;
-    return `<tr><td>${esc(part.description||'Trabajo')}</td><td><span class="badge">${esc(part.status||'Pendiente')}</span></td><td>${assignments}</td><td>${money(part.laborCost||0)}</td><td><button type="button" class="btn" onclick="partModal(${part.id})">Abrir</button> ${finishAction}</td></tr>`;
-  }).join('');
-  form.querySelector('.form')?.insertAdjacentHTML('beforeend',`<div class="field full employee-ledger-order-parts"><hr><h2>Piezas y mano de obra</h2><div class="actions"><button type="button" class="btn" onclick="partModal(null,${Number(orderId)})">+ Agregar pieza</button></div>${partRows?`<table class="table"><thead><tr><th>Trabajo</th><th>Estado</th><th>Empleados</th><th>Mano de obra</th><th></th></tr></thead><tbody>${partRows}</tbody></table>`:'<p class="muted">Aún no hay piezas registradas.</p>'}</div>`);
-}
-const employeeLedgerOrderModalBefore=orderModal;
-orderModal=async function(id){
-  await employeeLedgerOrderModalBefore(id);
-  if(id)await employeeLedgerShowPartsInOrder(Number(id));
-};
-window.orderModal=orderModal;
-
-const employeeLedgerPartModalBefore=window.partModal;
-window.partModal=async function(id=null,orderId=null){
-  await employeeLedgerPartModalBefore(id,orderId);
-  if(!id)return;
-  const form=document.querySelector('#modal form input[name="kind"][value="part"]')?.closest('form');
-  if(!form)return;
-  const d=await data();
-  const part=d.parts.find(item=>item.id===Number(id));
-  if(!part)return;
-  const responsibleLabel=form.querySelector('select[name="employeeId"]')?.closest('.field')?.querySelector('label');
-  if(responsibleLabel)responsibleLabel.textContent='Responsable de producción (opcional)';
-  const assignments=(part.laborAssignments||[]).map(assignment=>{
-    const employee=d.employees.find(item=>item.id===Number(assignment.employeeId));
-    const state=assignment.ledgerState==='generated'?'mano de obra generada':assignment.ledgerState==='pending'?'pendiente de terminar':assignment.ledgerState==='legacy'?'histórico':'';
-    return `<li><b>${esc(employee?.name||'Empleado sin registro')}</b> · ${esc(assignment.role||'Sin puesto')} · ${money(assignment.total||0)} <small>${esc(state)}</small></li>`;
-  }).join('');
-  if(!form.dataset.employeeLedgerDetails){
-    form.dataset.employeeLedgerDetails='1';
-    const responsible=d.employees.find(item=>item.id===Number(part.employeeId));
-    form.querySelector('.form')?.insertAdjacentHTML('beforeend',`<div class="field full"><hr><h2>Estado y mano de obra</h2><p><b>Estado actual:</b> <span class="badge">${esc(part.status||'Pendiente')}</span></p><p><b>Empleado responsable:</b> ${esc(responsible?.name||'Sin asignar')}</p>${assignments?`<ul class="muted">${assignments}</ul>`:'<p class="muted">Aún no hay mano de obra asignada. Usa “Asignar empleado y mano de obra” para que TallerOS pueda generar el pago al terminarla.</p>'}</div>`);
-  }
-  const actions=form?.querySelector('.actions');
-  if(actions&&!form.dataset.labor){
-    form.dataset.labor='1';
-    actions.insertAdjacentHTML('afterbegin',`${part.status==='Terminada'?'':`<button type="button" class="btn primary" onclick="employeeLedgerMarkPartFinished(${Number(id)})">Marcar como terminada</button>`}<button type="button" class="btn" onclick="laborAssignmentModal(${Number(id)})">Asignar empleado y mano de obra</button>`);
-  }
-};
-
-window.employeeLedgerMarkPartFinished=async function(partId){
-  try{
-    await employeeLedgerEnsureReady();
-    const part=await api.get('parts',Number(partId));
-    if(!part)throw new Error('No se encontró la pieza seleccionada.');
-    if(part.status==='Terminada'){
-      alert('Esta pieza ya está terminada. La mano de obra no se generará nuevamente.');
-      return;
+    let saved,destination;
+    switch(form.dataset.form){
+      case 'client':saved=await service.saveClient(v,c.id);destination='client/'+saved.id;break;
+      case 'vehicle':saved=await service.saveVehicle(v,c.id);destination='client/'+saved.clientId;break;
+      case 'employee':saved=await service.saveEmployee(v,c.id);destination='employee/'+saved.id;break;
+      case 'order':saved=await service.saveOrder(v,c.id);destination='order/'+saved.id;orderTab='work';break;
+      case 'part':saved=await service.savePart({...v,orderId:c.orderId},c.id);destination='order/'+saved.orderId;break;
+      case 'assign':await service.assign(c.partId,v);break;
+      case 'payment':await service.payment(c.orderId,v,c.id);destination='order/'+c.orderId;break;
+      case 'cost':await service.cost(c.orderId,v,c.id);orderTab='profit';destination='order/'+c.orderId;break;
+      case 'employee-payment':await service.employeePayment(c.accountId,v,c.id);break;
+      case 'product':saved=await service.saveProduct(v,c.id);destination='product/'+saved.id;break;
+      case 'inventory-move':await service.inventoryMove(c.id,{...v,kind:c.kind});break;
+      case 'settings':await service.settings(v);break;
     }
-    const d=await data();
-    const employees=(part.laborAssignments||[]).map(assignment=>d.employees.find(item=>item.id===Number(assignment.employeeId))?.name).filter(Boolean);
-    const message=employees.length?`¿Marcar “${part.description}” como terminada? Se generará la mano de obra pendiente de ${employees.join(', ')}.`:`¿Marcar “${part.description}” como terminada? No hay mano de obra asignada.`;
-    if(!confirm(message))return;
-    const before=(await employeeLedger.all('accruals')).filter(item=>Number(item.partId)===Number(part.id)).reduce((sum,item)=>sum+employeeLedgerNumber(item.total),0);
-    const completed=await employeeLedgerFinalizePart({...part,status:'Terminada'});
-    await api.put('parts',completed);
-    const after=(await employeeLedger.all('accruals')).filter(item=>Number(item.partId)===Number(part.id)).reduce((sum,item)=>sum+employeeLedgerNumber(item.total),0);
-    const generated=Math.max(0,after-before);
-    close();
-    await render();
-    await orderModal(completed.orderId);
-    alert(generated>0?`Pieza terminada. Se generó ${money(generated)} de mano de obra una sola vez.`:'Pieza terminada. No había mano de obra nueva por generar.');
-  }catch(error){
-    alert(`No se pudo terminar la pieza: ${error.message}`);
-  }
-};
-
-/* Una asignación queda pendiente hasta que la pieza llegue a Terminada. */
-window.saveLaborAssignment=async function(event,partId){
-  event.preventDefault();
+    dialog.close();await render();if(destination)navigate(destination);toast('Guardado correctamente.');
+  }catch(error){const errorEl=form.querySelector('.form-error');if(errorEl)errorEl.textContent=error.message;else toast(error.message);}
+  finally{busy=false;if(submit?.isConnected)submit.disabled=false;}
+});
+document.addEventListener('input',event=>{if(event.target.matches('[data-filter]'))filterCards();});
+document.addEventListener('change',async event=>{
+  const target=event.target;
   try{
-    await employeeLedgerEnsureReady();
-    const values=Object.fromEntries(new FormData(event.target));
-    const part=await api.get('parts',Number(partId));
-    const employeeId=Number(values.employeeId);
-    const quantity=Number(values.quantity||1);
-    const rate=Number(values.rate||0);
-    const employee=await api.get('employees',employeeId);
-    if(!part)throw new Error('No se encontró la pieza seleccionada.');
-    if(!employeeId||!employee||employee.active===false)throw new Error('Selecciona un empleado activo.');
-    if((part.laborAssignments||[]).some(assignment=>Number(assignment.employeeId)===employeeId&&assignment.ledgerState!=='invalid'))throw new Error('Este empleado ya está asignado a esta pieza. Edita la cantidad en lugar de agregarlo otra vez.');
-    if(!Number.isFinite(quantity)||quantity<=0)throw new Error('Indica una cantidad de piezas válida.');
-    if(!Number.isFinite(rate)||rate<=0)throw new Error('Indica una tarifa mayor que cero.');
-    const mode=values.mode||'Por pieza';
-    const total=mode==='Por pieza'?quantity*rate:rate;
-    const assignment={
-      sourceAssignmentId:employeeLedger.id(),
-      employeeId,
-      role:values.role||employee.role||'Otro',
-      quantity,
-      rate,
-      mode,
-      total,
-      work:(values.work||part.description||'Trabajo realizado').trim(),
-      date:employeeLedgerToday(),
-      ledgerState:'pending'
-    };
-    let updated={
-      ...part,
-      laborAssignments:[...(part.laborAssignments||[]),assignment],
-      laborCost:employeeLedgerNumber(part.laborCost),
-      legacyLaborCost:employeeLedgerLegacyCost(part)
-    };
-    updated=await employeeLedgerFinalizePart(updated);
-    await api.put('parts',updated);
-    await laborAssignmentModal(part.id);
-    await render();
-  }catch(error){
-    alert(`No se pudo asignar la mano de obra: ${error.message}`);
-  }
-};
-
-async function employeeLedgerEmployeeData(employeeId){
-  const [accounts,accruals,payments]=await Promise.all([
-    employeeLedger.listForEmployee('accounts',employeeId),
-    employeeLedger.listForEmployee('accruals',employeeId),
-    employeeLedger.listForEmployee('payments',employeeId)
-  ]);
-  const refreshed=[];
-  for(const account of accounts)refreshed.push(await employeeLedger.refreshAccount(account.id));
-  return {
-    accounts:refreshed.sort((a,b)=>Number(b.number)-Number(a.number)),
-    accruals:accruals.sort((a,b)=>new Date(b.generatedAt||b.date)-new Date(a.generatedAt||a.date)),
-    payments:payments.sort((a,b)=>new Date(b.createdAt||b.date)-new Date(a.createdAt||a.date))
-  };
-}
-
-window.employeeLedgerProfile=async function(employeeId){
-  try{
-    await employeeLedgerEnsureReady();
-    const d=await data();
-    const employee=d.employees.find(item=>item.id===Number(employeeId));
-    if(!employee)throw new Error('No se encontró el empleado.');
-    const ledgerData=await employeeLedgerEmployeeData(employee.id);
-    const totalGenerated=ledgerData.accruals.reduce((sum,item)=>sum+employeeLedgerNumber(item.total),0);
-    const totalPaid=ledgerData.payments.reduce((sum,item)=>sum+employeeLedgerNumber(item.amount),0);
-    const totalPieces=ledgerData.accruals.reduce((sum,item)=>sum+employeeLedgerNumber(item.quantity),0);
-    const monthPrefix=new Date().toISOString().slice(0,7);
-    const piecesThisMonth=ledgerData.accruals.filter(item=>String(item.date||'').slice(0,7)===monthPrefix).reduce((sum,item)=>sum+employeeLedgerNumber(item.quantity),0);
-    const pending=Math.max(0,totalGenerated-totalPaid);
-    const workRows=ledgerData.accruals.map(item=>{
-      const order=d.orders.find(order=>order.id===Number(item.orderId));
-      return `<tr><td>${esc(employeeLedgerDate(item.date))}</td><td>${esc(order?.number||'Orden eliminada')}</td><td>${esc(vn(d,item.vehicleId))}</td><td>${esc(item.work||'Trabajo')}</td><td>${item.quantity}</td><td>${money(item.total)}</td></tr>`;
-    }).join('');
-    const paymentRows=ledgerData.payments.map(item=>`<tr><td>${esc(employeeLedgerDate(item.date))}</td><td>${money(item.amount)}</td><td>${esc(item.note||'Sin nota')}</td></tr>`).join('');
-    document.querySelector('#modal')?.remove();
-    document.body.insertAdjacentHTML('beforeend',`<div class="modalbg" id="modal"><div class="modal"><h2>${esc(employee.name)} · Cuenta de mano de obra</h2><p class="muted">${esc(employee.role||'Sin puesto')} · Tarifa predeterminada: ${money(employee.pieceRate||0)} por pieza</p><div class="stats"><div class="stat"><span>Piezas realizadas</span><b>${totalPieces}</b><small>Este mes: ${piecesThisMonth}</small></div><div class="stat"><span>Mano de obra generada</span><b>${money(totalGenerated)}</b></div><div class="stat"><span>Total pagado</span><b>${money(totalPaid)}</b></div><div class="stat"><span>Saldo pendiente</span><b>${money(pending)}</b></div></div><div class="panel"><h2>Cuenta y períodos</h2>${ledgerData.accounts.length?table(['Cuenta','Estado','Generado','Pagado','Saldo','Cierre',''],ledgerData.accounts,account=>`<tr><td>${employeeLedgerAccountLabel(account)}</td><td><span class="badge">${esc(account.status)}</span></td><td>${money(account.generated)}</td><td>${money(account.paid)}</td><td>${money(account.balance)}</td><td>${account.closedAt?esc(employeeLedgerDate(account.closedAt)):'—'}</td><td>${account.status==='ABIERTA'&&account.balance>0?`<button type="button" class="btn" onclick="employeeLedgerPaymentModal('${account.id}')">Registrar pago</button>`:''}${account.status==='PAGADA'?` <button type="button" class="btn primary" onclick="employeeLedgerCloseAccount('${account.id}',${employee.id})">Cerrar cuenta</button>`:''}</td></tr>`):'<p class="muted">Todavía no hay una cuenta generada. Se crea al terminar una pieza asignada a este empleado.</p>'}</div><div class="panel"><h2>Historial de trabajos</h2>${workRows?`<table class="table"><thead><tr><th>Fecha</th><th>Orden</th><th>Vehículo</th><th>Trabajo</th><th>Piezas</th><th>Monto</th></tr></thead><tbody>${workRows}</tbody></table>`:'<p class="muted">Aún no hay trabajos terminados.</p>'}</div><div class="panel"><h2>Historial de pagos</h2>${paymentRows?`<table class="table"><thead><tr><th>Fecha</th><th>Monto</th><th>Nota</th></tr></thead><tbody>${paymentRows}</tbody></table>`:'<p class="muted">Aún no hay pagos registrados.</p>'}</div><div class="actions"><button type="button" class="btn" onclick="close()">Cerrar</button></div></div></div>`);
-  }catch(error){
-    alert(`No se pudo abrir la cuenta del empleado: ${error.message}`);
-  }
-};
-
-window.employeeLedgerPaymentModal=async function(accountId){
-  try{
-    await employeeLedgerEnsureReady();
-    const account=await employeeLedger.refreshAccount(accountId);
-    if(account.status==='CERRADA')throw new Error('Esta cuenta ya está cerrada.');
-    if(account.balance<=0.005)throw new Error('Esta cuenta ya está completamente pagada.');
-    document.querySelector('#modal')?.remove();
-    document.body.insertAdjacentHTML('beforeend',`<div class="modalbg" id="modal"><form class="modal" onsubmit="employeeLedgerSavePayment(event,'${account.id}')"><h2>Registrar pago de empleado</h2><p class="muted">${employeeLedgerAccountLabel(account)} · Saldo pendiente: ${money(account.balance)}</p><div class="form">${field('Fecha','date',employeeLedgerToday(),'date')}${field('Monto a pagar','amount','','number')}${field('Nota','note','','text','full')}</div><div class="actions"><button type="button" class="btn" onclick="employeeLedgerProfile(${account.employeeId})">Cancelar</button><button class="btn primary">Guardar pago</button></div></form></div>`);
-  }catch(error){
-    alert(error.message);
-  }
-};
-
-window.employeeLedgerSavePayment=async function(event,accountId){
-  event.preventDefault();
-  try{
-    await employeeLedgerEnsureReady();
-    const values=Object.fromEntries(new FormData(event.target));
-    const account=await employeeLedger.recordPayment(accountId,values.amount,values.note,values.date||employeeLedgerToday());
-    await employeeLedgerProfile(account.employeeId);
-    await render();
-  }catch(error){
-    alert(`No se pudo registrar el pago: ${error.message}`);
-  }
-};
-
-window.employeeLedgerCloseAccount=async function(accountId,employeeId){
-  try{
-    await employeeLedgerEnsureReady();
-    if(!confirm('¿Cerrar esta cuenta pagada? Se abrirá un nuevo período con saldo RD$0.'))return;
-    await employeeLedger.closePaidAccount(accountId);
-    await employeeLedgerProfile(employeeId);
-  }catch(error){
-    alert(`No se pudo cerrar la cuenta: ${error.message}`);
-  }
-};
-
-/* La vista de Configuración ya existente mantiene sus datos y suma el acceso a cada cuenta. */
-settings=function(d){
-  settingsPainted=true;
-  const s=d.settings[0]||{id:1,name:'RevivAuto'};
-  const employeeCards=d.employees.map(employee=>`<div class="card"><b>${esc(employee.name)}</b><br><small>${esc(employee.role||'Sin puesto')} · ${employee.active===false?'Inactivo':'Activo'} · ${money(employee.pieceRate||0)} por pieza</small><div class="actions"><button type="button" class="btn" onclick="employeeLedgerProfile(${employee.id})">Ver cuenta</button><button type="button" class="link" onclick="employeeModal(${employee.id})">Editar</button></div></div>`).join('')||'<p class="muted">Aún no hay empleados.</p>';
-  A.innerHTML=shell('Configuración',`<div class="panel"><h2>Datos del taller</h2><form class="form" data-employees="1" onsubmit="saveWorkshop(event,${s.id||1})">${field('Nombre del taller','name',s.name)}${field('Teléfono','phone',s.phone)}${field('WhatsApp','whatsapp',s.whatsapp)}${field('Correo electrónico','email',s.email)}${field('Dirección','address',s.address,'text','full')}${field('RNC/Cédula','document',s.document)}${field('Prefijo de órdenes','prefix',s.prefix||'REV')}${field('Tarifa del pintor por pieza (RD$)','painterRate',s.painterRate||350,'number')}<div class="field full"><label>Logo del taller</label><div id="logoPreview">${s.logoData?`<img class="workshop-logo" src="${s.logoData}" alt="Logo del taller">`:'<span class="muted">Aún no hay logo cargado.</span>'}</div><input id="logoInput" type="file" accept="image/png,image/jpeg,image/webp" onchange="uploadLogo(this,${s.id||1})"><span class="muted">PNG, JPG, JPEG o WEBP · máximo 2 MB.</span><div class="actions"><button type="button" class="btn" onclick="document.getElementById('logoInput').click()">${s.logoData?'Cambiar logo':'Subir logo'}</button>${s.logoData?`<button type="button" class="btn danger" onclick="removeLogo(${s.id||1})">Eliminar logo</button>`:''}</div></div><div class="field full"><hr><h2>Empleados y puestos</h2><p class="muted">La mano de obra se genera una sola vez al terminar una pieza asignada.</p><div class="actions"><button type="button" class="btn" onclick="employeeModal()">+ Agregar empleado</button><button type="button" class="btn" onclick="roleModal()">+ Agregar puesto</button></div>${employeeCards}</div><div class="field full"><button class="btn primary">Guardar datos del taller</button></div></form></div>`);
-};
-
-/* Evita que un pago o un formulario manual vuelva a contar mano de obra. */
-const employeeLedgerRentFormBefore=window.rentForm;
-window.rentForm=function(orderId,type){
-  if(type==='Mano de obra'){
-    alert('La mano de obra se registra desde cada pieza: asigna el empleado y marca la pieza como terminada. Así TallerOS evita duplicar costos.');
-    return;
-  }
-  return employeeLedgerRentFormBefore(orderId,type);
-};
-const employeeLedgerSaveRentBefore=window.saveRent;
-window.saveRent=async function(event,orderId,type){
-  if(type==='Mano de obra'){
-    event.preventDefault();
-    alert('La mano de obra se registra desde la pieza para evitar que el costo se cuente dos veces.');
-    return;
-  }
-  return employeeLedgerSaveRentBefore(event,orderId,type);
-};
-
-/* Rentabilidad incorpora los costos de piezas terminadas, incluida mano de obra. */
-window.rentabilityModal=async function(orderId){
-  const d=await data();
-  const order=d.orders.find(item=>item.id===Number(orderId));
-  if(!order)return;
-  const direct=d.costs.filter(item=>item.orderId===Number(orderId));
-  const pieces=d.parts.filter(item=>item.orderId===Number(orderId));
-  const labor=sumType(direct,'Mano de obra')+pieces.reduce((sum,item)=>sum+employeeLedgerNumber(item.laborCost),0);
-  const materials=sumType(direct,'Materiales')+pieces.reduce((sum,item)=>sum+employeeLedgerNumber(item.materialCost),0);
-  const others=sumType(direct,'Otros costos')+pieces.reduce((sum,item)=>sum+employeeLedgerNumber(item.otherCost),0);
-  const total=labor+materials+others;
-  const profit=employeeLedgerNumber(order.total)-total;
-  const totalPaid=paid(d,order.id);
-  const margin=employeeLedgerNumber(order.total)?profit/employeeLedgerNumber(order.total)*100:0;
-  document.querySelector('#modal')?.remove();
-  document.body.insertAdjacentHTML('beforeend',`<div class="modalbg" id="modal"><div class="modal"><h2>Rentabilidad · ${esc(order.number)}</h2><div class="stats"><div class="stat"><span>Precio del trabajo</span><b>${money(order.total)}</b></div><div class="stat"><span>Mano de obra</span><b>${money(labor)}</b></div><div class="stat"><span>Costo total</span><b>${money(total)}</b></div><div class="stat"><span>Ganancia estimada</span><b>${money(profit)}</b></div><div class="stat"><span>Margen</span><b>${margin.toFixed(1)}%</b></div><div class="stat"><span>Balance pendiente</span><b>${money(employeeLedgerNumber(order.total)-totalPaid)}</b></div></div><div class="tabs"><button class="on" onclick="rentForm(${order.id},'Mano de obra')">Mano de obra desde piezas</button><button onclick="rentForm(${order.id},'Materiales')">+ Material</button><button onclick="rentForm(${order.id},'Otros costos')">+ Otro costo</button></div><div class="panel"><h2>Costos directos registrados</h2>${direct.length?table(['Tipo','Detalle','Monto'],direct,item=>`<tr><td>${esc(item.type)}</td><td>${esc(item.description||item.concept||'—')}</td><td>${money(item.amount)}</td></tr>`):'<p class="muted">Aún no hay costos directos para esta orden.</p>'}<p class="muted">La mano de obra generada por piezas se suma automáticamente y no se duplica al registrar pagos al empleado.</p></div><div class="actions"><button class="btn" onclick="close()">Cerrar</button></div></div></div>`);
-};
-
-/*
- * Numeración de órdenes: contador persistente y de alta seguridad.
- *
- * El valor orderSequence es un "high-water mark": nunca se reduce, aunque
- * una orden se cancele, se mueva a Papelera, se restaure o se elimine para
- * siempre. La primera vez que se instala esta mejora se inicializa una sola
- * vez a partir del historial ya existente. Después, cada alta reserva el
- * siguiente número junto con la orden dentro de la misma transacción de
- * IndexedDB; por eso dos pestañas no pueden recibir el mismo número.
- */
-(() => {
-  const ORDER_SEQUENCE_FIELD = 'orderSequence';
-  const ORDER_SEQUENCE_READY_FIELD = 'orderSequenceInitializedAt';
-  const orderSuffix = value => {
-    const match = String(value || '').match(/(\d+)$/);
-    const number = match ? Number(match[1]) : 0;
-    return Number.isSafeInteger(number) && number >= 0 ? number : 0;
-  };
-  const validSequence = value => {
-    const number = Number(value);
-    return Number.isSafeInteger(number) && number >= 0 ? number : null;
-  };
-  const orderPrefix = setting => String(setting?.prefix || 'REV').trim().toUpperCase().replace(/\s+/g, '') || 'REV';
-  const formattedOrderNumber = (prefix, sequence) => `${prefix}-${String(sequence).padStart(4, '0')}`;
-  const validDateValue = value => {
-    const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    if (!match) return false;
-    const [year, month, day] = match.slice(1).map(Number);
-    const dateValue = new Date(year, month - 1, day);
-    return dateValue.getFullYear() === year && dateValue.getMonth() === month - 1 && dateValue.getDate() === day;
-  };
-  const allowedOrderStatuses = new Set(['Cotización', 'Aprobada', 'Esperando ingreso', 'En reparación', 'En preparación', 'En pintura', 'En acabado', 'Lista para entregar', 'Entregada', 'Cancelada']);
-
-  function normalizedSetting(setting) {
-    return {
-      ...(setting || {}),
-      id: Number.isFinite(Number(setting?.id)) ? Number(setting.id) : 1,
-      workshopId: WID,
-      name: setting?.name || 'RevivAuto',
-      prefix: orderPrefix(setting)
-    };
-  }
-
-  function highestExistingSequence(orders) {
-    return (orders || [])
-      .filter(order => Number(order?.workshopId) === Number(WID))
-      .reduce((highest, order) => Math.max(highest, orderSuffix(order.number)), 0);
-  }
-
-  api.ensureOrderNumberSequence = async function () {
-    const database = await db;
-    return new Promise((resolve, reject) => {
-      const transaction = database.transaction(['settings', 'orders'], 'readwrite');
-      const settingsStore = transaction.objectStore('settings');
-      const ordersStore = transaction.objectStore('orders');
-      let result = null;
-      transaction.oncomplete = () => resolve(result);
-      transaction.onerror = () => reject(transaction.error || new Error('No se pudo preparar la numeración de órdenes.'));
-      transaction.onabort = () => reject(transaction.error || new Error('La preparación de la numeración fue cancelada.'));
-
-      const settingRequest = settingsStore.get(1);
-      settingRequest.onerror = () => transaction.abort();
-      settingRequest.onsuccess = () => {
-        const setting = normalizedSetting(settingRequest.result);
-        const current = validSequence(setting[ORDER_SEQUENCE_FIELD]);
-        const initialized = Boolean(setting[ORDER_SEQUENCE_READY_FIELD]) && current !== null;
-        if (initialized) {
-          result = { sequence: current, prefix: orderPrefix(setting) };
-          return;
-        }
-        const ordersRequest = ordersStore.getAll();
-        ordersRequest.onerror = () => transaction.abort();
-        ordersRequest.onsuccess = () => {
-          const sequence = Math.max(current || 0, highestExistingSequence(ordersRequest.result));
-          const updated = {
-            ...setting,
-            [ORDER_SEQUENCE_FIELD]: sequence,
-            [ORDER_SEQUENCE_READY_FIELD]: new Date().toISOString()
-          };
-          settingsStore.put(updated);
-          result = { sequence, prefix: orderPrefix(updated) };
-        };
-      };
-    });
-  };
-
-  api.createOrderWithNextNumber = async function (record) {
-    const database = await db;
-    return new Promise((resolve, reject) => {
-      const transaction = database.transaction(['settings', 'orders'], 'readwrite');
-      const settingsStore = transaction.objectStore('settings');
-      const ordersStore = transaction.objectStore('orders');
-      let created = null;
-      transaction.oncomplete = () => resolve(created);
-      transaction.onerror = () => reject(transaction.error || new Error('No se pudo crear la orden.'));
-      transaction.onabort = () => reject(transaction.error || new Error('No se pudo reservar el número de la orden.'));
-
-      const reserve = (rawSetting, currentSequence) => {
-        if (currentSequence >= Number.MAX_SAFE_INTEGER) {
-          transaction.abort();
-          return;
-        }
-        const setting = normalizedSetting(rawSetting);
-        const sequence = currentSequence + 1;
-        const number = formattedOrderNumber(orderPrefix(setting), sequence);
-        const updatedSetting = {
-          ...setting,
-          [ORDER_SEQUENCE_FIELD]: sequence,
-          [ORDER_SEQUENCE_READY_FIELD]: setting[ORDER_SEQUENCE_READY_FIELD] || new Date().toISOString()
-        };
-        settingsStore.put(updatedSetting);
-        const orderRequest = ordersStore.add({ ...record, workshopId: WID, number });
-        orderRequest.onerror = () => transaction.abort();
-        orderRequest.onsuccess = () => {
-          created = { id: orderRequest.result, number, sequence };
-        };
-      };
-
-      const settingRequest = settingsStore.get(1);
-      settingRequest.onerror = () => transaction.abort();
-      settingRequest.onsuccess = () => {
-        const setting = normalizedSetting(settingRequest.result);
-        const current = validSequence(setting[ORDER_SEQUENCE_FIELD]);
-        const initialized = Boolean(setting[ORDER_SEQUENCE_READY_FIELD]) && current !== null;
-        if (initialized) {
-          reserve(setting, current);
-          return;
-        }
-        /* Migración única: solo si todavía no existía el contador persistente. */
-        const ordersRequest = ordersStore.getAll();
-        ordersRequest.onerror = () => transaction.abort();
-        ordersRequest.onsuccess = () => reserve(setting, Math.max(current || 0, highestExistingSequence(ordersRequest.result)));
-      };
-    });
-  };
-
-  /* Solo eleva el contador: se usa al recuperar copias o historiales previos. */
-  api.raiseOrderNumberSequence = async function (minimum) {
-    const requested = validSequence(minimum);
-    const initialized = await api.ensureOrderNumberSequence();
-    const floor = Math.max(initialized.sequence || 0, requested === null ? 0 : requested);
-    const database = await db;
-    return new Promise((resolve, reject) => {
-      const transaction = database.transaction('settings', 'readwrite');
-      const settingsStore = transaction.objectStore('settings');
-      let result = null;
-      transaction.oncomplete = () => resolve(result);
-      transaction.onerror = () => reject(transaction.error || new Error('No se pudo proteger el contador de órdenes.'));
-      transaction.onabort = () => reject(transaction.error || new Error('La protección del contador fue cancelada.'));
-      const settingRequest = settingsStore.get(1);
-      settingRequest.onerror = () => transaction.abort();
-      settingRequest.onsuccess = () => {
-        const setting = normalizedSetting(settingRequest.result);
-        const current = validSequence(setting[ORDER_SEQUENCE_FIELD]) || 0;
-        const sequence = Math.max(current, floor);
-        if (sequence !== current || !setting[ORDER_SEQUENCE_READY_FIELD]) {
-          settingsStore.put({
-            ...setting,
-            [ORDER_SEQUENCE_FIELD]: sequence,
-            [ORDER_SEQUENCE_READY_FIELD]: setting[ORDER_SEQUENCE_READY_FIELD] || new Date().toISOString()
-          });
-        }
-        result = { sequence, prefix: orderPrefix(setting) };
-      };
-    });
-  };
-
-  const saveBeforeOrderSequence = window.save;
-  window.save = async function (event) {
-    const form = event?.target;
-    const formData = form ? new FormData(form) : null;
-    if (!formData || formData.get('kind') !== 'order') return saveBeforeOrderSequence(event);
-    event.preventDefault();
-    try {
-      const values = Object.fromEntries(formData);
-      const clientId = Number(values.clientId);
-      const vehicleId = Number(values.vehicleId);
-      const totalText = String(values.total ?? '').trim();
-      const total = totalText === '' ? 0 : Number(totalText);
-      if (!Number.isFinite(clientId) || clientId <= 0) throw new Error('Selecciona un cliente.');
-      if (!Number.isFinite(vehicleId) || vehicleId <= 0) throw new Error('Selecciona un vehículo.');
-      if (!validDateValue(values.entryDate)) throw new Error('Indica una fecha de entrada válida.');
-      if (values.dueDate && !validDateValue(values.dueDate)) throw new Error('Indica una fecha estimada de entrega válida.');
-      if (!allowedOrderStatuses.has(values.status)) throw new Error('Selecciona un estado válido para la orden.');
-      if (!Number.isFinite(total) || total < 0) throw new Error('Indica un precio total válido.');
-
-      const [client, vehicle] = await Promise.all([api.get('clients', clientId), api.get('vehicles', vehicleId)]);
-      if (!client || Number(client.workshopId) !== Number(WID)) throw new Error('El cliente seleccionado ya no está disponible.');
-      if (!vehicle || Number(vehicle.workshopId) !== Number(WID) || Number(vehicle.clientId) !== clientId) {
-        throw new Error('El vehículo debe pertenecer al cliente seleccionado.');
-      }
-
-      const payload = {
-        clientId,
-        vehicleId,
-        entryDate: values.entryDate,
-        dueDate: values.dueDate || '',
-        status: values.status,
-        total,
-        notes: String(values.notes || '').trim()
-      };
-      if (values.id) {
-        const existing = await api.get('orders', Number(values.id));
-        if (!existing) throw new Error('No se encontró la orden que intentas modificar.');
-        await api.put('orders', { ...existing, ...payload, id: existing.id, workshopId: WID, number: existing.number });
-      } else {
-        await api.createOrderWithNextNumber(payload);
-      }
-      close();
-      await render();
-    } catch (error) {
-      alert(`No se pudo guardar la orden: ${error.message || 'Revisa los datos e inténtalo de nuevo.'}`);
+    if(target.name==='period'){selectedMonth=target.value||today().slice(0,7);monthPage();}
+    if(target.name==='clientId'&&target.closest('[data-form="order"]')){const s=dialog.querySelector('[name="vehicleId"]');s.innerHTML='<option value="">Seleccionar</option>'+d.vehicles.filter(v=>v.clientId===Number(target.value)&&!v.archived).map(v=>'<option value="'+v.id+'">'+esc(v.brand+' '+v.model+' '+(v.plate||''))+'</option>').join('');}
+    if(target.name==='employeeId'&&target.closest('[data-form="assign"]'))dialog.querySelector('[name="rate"]').value=find(d,'employees',target.value)?.pieceRate||0;
+    if(target.id==='backup-file'){
+      const file=target.files[0];if(!file)return;if(file.size>100*1024*1024)throw Error('La copia supera 100 MB.');
+      pendingImport=JSON.parse(await file.text());service.storage.validate(pendingImport);
+      confirmAction('Importar copia','Se reemplazarán los datos de este taller por la copia seleccionada. Primero se guardará una recuperación local completa.','import-confirm','','Importar y reemplazar');
     }
-  };
-  window.save = window.save;
-
-})();
+    if(target.id==='logo'){
+      const file=target.files[0];if(!file)return;if(!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>2*1024*1024)throw Error('Selecciona PNG, JPG o WEBP de hasta 2 MB.');
+      const data=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=reject;r.readAsDataURL(file);});
+      await service.settings({logoData:data});await render();toast('Logo guardado.');
+    }
+  }catch(e){toast(e.message);}
+});
+dialog.addEventListener('close',()=>previousFocus?.isConnected&&previousFocus.focus());
+window.addEventListener('hashchange',()=>{dialog.close();window.scrollTo(0,0);render().catch(e=>toast(e.message));});
+window.addEventListener('talleros-blocked',()=>{app.innerHTML='<main><h1>Cierra las otras pestañas de TallerOS</h1><p>La actualización necesita que cierres la versión anterior en este navegador. No borres datos. Esta pantalla continuará cuando se libere el almacenamiento.</p></main>';});
+window.addEventListener('talleros-versionchange',()=>{app.innerHTML='<main><h1>Hay una nueva versión</h1><p>Recarga esta pestaña para seguir trabajando.</p></main>';});
+try{await service.init();await render();}catch(error){app.innerHTML='<main><h1>No se pudo abrir TallerOS</h1><p>'+esc(error.message)+'</p><p>Conserva los datos del navegador y vuelve a intentar. No borres IndexedDB.</p></main>';}
