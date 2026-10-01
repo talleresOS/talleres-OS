@@ -1,4 +1,4 @@
-const CACHE='talleros-phase2-2.1.0';
+const CACHE='talleros-phase2-2.2.0';
 const SHELL=['./','./index.html','./styles.css','./app.js','./domain.mjs','./storage.mjs','./service.mjs','./pwa.js','./manifest.webmanifest','./manifest.json','./icon.svg','./icon-192.png','./icon-512.png','./apple-touch-icon.png','./version.json'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL))));
 // Deliberately no skipWaiting: every old tab must close before changing the database version.

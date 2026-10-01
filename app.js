@@ -17,6 +17,23 @@ const client=o=>find(d,'clients',o.clientId)||{};
 const vehicle=o=>find(d,'vehicles',o.vehicleId)||{};
 const vehicleText=o=>{const v=vehicle(o);return [v.brand,v.model,v.year].filter(Boolean).join(' ')||'Vehículo sin referencia';};
 const badge=label=>'<span class="badge">'+esc(label)+'</span>';
+// Appearance is presentation-only and persists in the existing settings record.
+const appearanceDefaults={theme:'dark',primary:'#eec567',accent:'#69c9c1'};
+function appearance(){const v=d.settings[0]?.appearance||{};return {theme:v.theme==='light'?'light':'dark',primary:/^#[0-9a-f]{6}$/i.test(v.primary)?v.primary:appearanceDefaults.primary,accent:/^#[0-9a-f]{6}$/i.test(v.accent)?v.accent:appearanceDefaults.accent};}
+function luminance(hex){const rgb=hex.match(/[0-9a-f]{2}/gi).map(x=>parseInt(x,16)/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4);return .2126*rgb[0]+.7152*rgb[1]+.0722*rgb[2];}
+function readableAccent(color,theme){
+  const background=theme==='light'?'#ffffff':'#202936',target=theme==='light'?0:255,b=luminance(background);
+  const rgb=color.slice(1).match(/../g).map(x=>parseInt(x,16));
+  for(let step=0;step<=20;step++){const hex='#'+rgb.map(x=>Math.round(x+(target-x)*step/20).toString(16).padStart(2,'0')).join(''),l=luminance(hex);if((Math.max(l,b)+.05)/(Math.min(l,b)+.05)>=4.5)return hex;}
+  return theme==='light'?'#000000':'#ffffff';
+}
+function applyAppearance(){
+  const a=appearance(),root=document.documentElement;root.dataset.theme=a.theme;
+  root.style.setProperty('--primary',a.primary);root.style.setProperty('--accent',a.accent);
+  root.style.setProperty('--on-primary',luminance(a.primary)>.179?'#000000':'#ffffff');
+  root.style.setProperty('--gold',readableAccent(a.primary,a.theme));root.style.setProperty('--accent-ink',readableAccent(a.accent,a.theme));
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content',a.theme==='light'?'#f3f5f8':'#151b24');
+}
 function toast(message){const t=document.querySelector('#toast');t.textContent=message;t.hidden=false;clearTimeout(toast.timer);toast.timer=setTimeout(()=>t.hidden=true,5000);}
 function navigate(target){dialog.close();if(location.hash==='#'+target)render();else location.hash=target;}
 function shell(title,body,action=''){
@@ -46,10 +63,10 @@ function orderPage(){
   let body='';
   if(orderTab==='work'){
     const parts=d.parts.filter(p=>belongs(p,o.id));
-    body='<section><div class="section-title"><h2>Piezas y trabajos</h2>'+(isActive?button('Agregar pieza','part-new',o.id,'compact'):'')+'</div><div class="list">'+(parts.map(p=>{
-      const assignments=(p.laborAssignments||[]).map(a=>esc(find(d,'employees',a.employeeId)?.name||'Empleado')+' · '+money(a.total)+' · '+({pending:'asignado',generated:'devengado',legacy:'histórico',invalid:'revisar'}[a.ledgerState]||'revisar')).join('<br>');
-      return '<article class="card '+(p.archived?'muted':'')+'"><div class="split"><h3>'+esc(p.description)+'</h3>'+badge(p.archived?'Archivada':p.status)+'</div><p class="muted">'+(assignments||'Sin mano de obra asignada')+'</p><div class="inline-actions">'+(isActive?(p.archived?button('Restaurar','part-restore',p.id):button('Abrir pieza','part-edit',p.id)+(p.status!=='Terminada'?button('Terminar','part-finish',p.id,'compact'):'')+button('Asignar empleado','assign',p.id,'quiet')):'')+'</div></article>';
-    }).join('')||empty('Agrega las piezas o trabajos de esta orden.'))+'</div>'+(isActive&&!parts.filter(p=>!p.archived).length?button('Marcar trabajo terminado','work-finish',o.id,'quiet'):'')+'</section><section class="panel"><h2>Datos de la orden</h2>'+row('Cliente',esc(client(o).name))+row('Teléfono',esc(client(o).phone))+row('Vehículo',esc(vehicleText(o)))+row('Placa',esc(vehicle(o).plate||'Sin placa'))+row('Entrada',date(o.entryDate))+row('Entrega prevista',date(o.dueDate))+row('Precio acordado',money(f.revenue))+(o.notes?'<h3>Notas internas</h3><p>'+esc(o.notes)+'</p>':'')+(o.customerNotes?'<h3>Notas para el cliente</h3><p>'+esc(o.customerNotes)+'</p>':'')+'</section>';
+    body='<section><div class="section-title"><h2>Piezas y trabajos</h2>'+(isActive?button('Agregar pieza','part-new',o.id,'compact'):'')+'</div><div class="list">'+(parts.filter(p=>!p.archived).map(p=>{
+      const assignments=(p.laborAssignments||[]).map(a=>esc(find(d,'employees',a.employeeId)?.name||'Empleado')+' · '+money(a.total)+' · '+({pending:'asignado',generated:'devengado',legacy:'histórico',invalid:'revisar'}[a.ledgerState]||'revisar')+(n(a.quantity)>1&&a.mode==='Por pieza'?'<small class="block">'+esc(a.quantity)+' piezas × '+money(a.rate)+' cada una</small>':'')).join('<br>');
+      return '<article class="card piece-card" data-part-id="'+esc(p.id)+'"><div class="split"><h3>'+esc(p.description)+'</h3>'+badge(p.status)+'</div><p class="muted">'+(assignments||'Sin mano de obra asignada')+'</p>'+(isActive?'<div class="piece-actions">'+(p.status!=='Terminada'?button('Terminar','part-finish',p.id,'compact'):'<span class="piece-complete">✓ Terminada</span>')+button('Asignar empleado','assign',p.id,'quiet')+button('<span aria-hidden="true">•••</span><span class="sr-only">Opciones de '+esc(p.description)+'</span>','part-menu',p.id,'icon')+'</div>':'')+'</article>';
+    }).join('')||empty('Agrega las piezas o trabajos de esta orden.'))+'</div>'+(parts.some(p=>p.archived)?'<details class="removed-parts"><summary>Piezas retiradas ('+parts.filter(p=>p.archived).length+')</summary><p class="help">Se conservan sus referencias y movimientos. Puedes restaurarlas.</p>'+parts.filter(p=>p.archived).map(p=>'<div class="row"><span>'+esc(p.description)+'</span>'+(isActive?button('Restaurar','part-restore',p.id,'compact'):'<small>Retirada</small>')+'</div>').join('')+'</details>':'')+(isActive&&!parts.filter(p=>!p.archived).length?button('Marcar trabajo terminado','work-finish',o.id,'quiet'):'')+'</section><section class="panel"><h2>Datos de la orden</h2>'+row('Cliente',esc(client(o).name))+row('Teléfono',esc(client(o).phone))+row('Vehículo',esc(vehicleText(o)))+row('Placa',esc(vehicle(o).plate||'Sin placa'))+row('Entrada',date(o.entryDate))+row('Entrega prevista',date(o.dueDate))+row('Precio acordado',money(f.revenue))+(o.notes?'<h3>Notas internas</h3><p>'+esc(o.notes)+'</p>':'')+(o.customerNotes?'<h3>Notas para el cliente</h3><p>'+esc(o.customerNotes)+'</p>':'')+'</section>';
   }else if(orderTab==='profit'){
     const costs=d.costs.filter(x=>belongs(x,o.id)),accruals=d.ledgerAccruals.filter(x=>belongs(x,o.id));
     const allocated=d.ledgerPayments.filter(x=>!x.voided).flatMap(p=>(p.allocations||[]).filter(a=>Number(a.orderId)===Number(o.id)).map(a=>({...a,date:p.date,employeeId:p.employeeId})));
@@ -101,8 +118,8 @@ function monthPage(){
   shell('Cierre mensual','<div class="filters">'+field('Período','period',selectedMonth,'month')+'</div>'+(snapshot?'<div class="notice">Mes cerrado el '+date(snapshot.closedAt)+'. Estás viendo la instantánea guardada.</div>':'<p class="help">Período abierto. '+esc(m.basis)+'</p>')+'<div class="metrics">'+metric('Total vendido',money(m.sold))+metric('Realmente cobrado',money(m.cash))+metric('Por cobrar al cierre',money(m.receivables))+metric('Ganancia del período',money(m.profit))+'</div><div class="cards"><section class="panel"><h2>Costos y resultado</h2>'+row('Materiales',money(m.materials))+row('Mano de obra',money(m.labor))+row('Otros gastos',money(m.others))+row('Costos del período',money(m.costs))+row('Margen',m.margin+'%')+'</section><section class="panel"><h2>Operación</h2>'+row('Órdenes abiertas en el mes',m.opened)+row('Órdenes cerradas / entregas',m.closed)+row('Vehículos distintos entregados',m.vehicles)+row('Piezas terminadas con fecha',m.pieces)+'</section><section class="panel"><h2>Empleados</h2>'+row('Devengado en el mes',money(m.generated))+row('Pagado en el mes',money(m.employeePaid))+row('Saldo acumulado al cierre',money(m.employeeBalance))+'</section><section class="panel"><h2>Inventario</h2>'+row('Compras del mes',money(m.purchases))+row('Consumo registrado',money(m.consumption))+'<p class="help">Compras no equivale a costo consumido en los trabajos.</p></section></div>'+(m.undatedCount||m.undatedClosures?'<div class="notice">'+m.undatedCount+' costos históricos sin fecha ('+money(m.undatedCosts)+') y '+m.undatedClosures+' cierres sin fecha real. Se conservan en el historial y no se asignan a un mes inventado. El resultado mensual puede estar incompleto.</div>':'')+(!snapshot?button('Cerrar mes y guardar instantánea','month-close',selectedMonth):''));
 }
 function settings(){
-  const s=d.settings[0],issues=audit(d);
-  shell('Configuración','<section class="panel"><h2>Datos del taller</h2><form data-form="settings" class="form">'+field('Nombre del taller','name',s.name,'text','required')+field('Teléfono','phone',s.phone,'tel')+field('WhatsApp','whatsapp',s.whatsapp,'tel')+field('Correo','email',s.email,'email')+field('Dirección','address',s.address)+field('RNC / Cédula','document',s.document)+field('Prefijo de órdenes','prefix',s.prefix)+field('Tarifa de referencia del pintor','painterRate',s.painterRate||350,'number')+'<div class="full"><button class="btn primary">Guardar datos</button></div></form><h3>Logo</h3>'+(s.logoData?'<img class="logo-preview" src="'+esc(s.logoData)+'" alt="Logo del taller">':'')+'<label class="field"><span>Subir logo (PNG, JPG o WEBP · máximo 2 MB)</span><input type="file" id="logo" accept="image/png,image/jpeg,image/webp"></label></section><section class="panel"><h2>Copias de seguridad</h2><p class="help">Tus datos se guardan en este navegador y esta dirección. Exporta una copia antes de cambiar de dispositivo o borrar datos del navegador.</p><div class="inline-actions">'+button('Exportar todos los datos','export','','primary')+button('Importar copia','import')+'</div><input type="file" id="backup-file" accept=".json,application/json" hidden><h3>Recuperación</h3><p>'+d.snapshots.length+' instantáneas locales conservadas.</p>'+button('Descargar recuperación inicial','recovery','','quiet')+'</section><section class="panel"><h2>Revisión de datos</h2>'+(issues.length?issues.map(x=>'<p class="notice">'+esc(x.message)+' · Registro '+esc(x.id)+'</p>').join(''):'<p>No se detectaron referencias rotas, números repetidos ni excesos de cobro en la revisión automática.</p>')+'</section><section class="panel"><h2>TallerOS '+VERSION+'</h2><p>Dirección actual</p><p class="url">'+esc(location.origin+location.pathname)+'</p>'+button('Instalar en el teléfono','install')+'</section>');
+  const s=d.settings[0],issues=audit(d),a=appearance();
+  shell('Configuración','<section class="panel"><h2>Datos del taller</h2><form data-form="settings" class="form">'+field('Nombre del taller','name',s.name,'text','required')+field('Teléfono','phone',s.phone,'tel')+field('WhatsApp','whatsapp',s.whatsapp,'tel')+field('Correo','email',s.email,'email')+field('Dirección','address',s.address)+field('RNC / Cédula','document',s.document)+field('Prefijo de órdenes','prefix',s.prefix)+'<div class="full"><button class="btn">Guardar datos</button></div></form><h3>Logo</h3>'+(s.logoData?'<img class="logo-preview" src="'+esc(s.logoData)+'" alt="Logo del taller">':'')+'<label class="field"><span>Subir logo (PNG, JPG o WEBP · máximo 2 MB)</span><input type="file" id="logo" accept="image/png,image/jpeg,image/webp"></label></section><section class="panel appearance-panel"><p class="eyebrow">Tu identidad</p><h2>Apariencia</h2><p class="muted">Elige los colores y el tema de tu taller.</p><form data-form="appearance" class="form">'+select('Tema','theme',[['dark','Oscuro'],['light','Claro']],a.theme)+field('Color principal','primary',a.primary,'color')+field('Color secundario / acento','accent',a.accent,'color')+'<div class="full"><button class="btn primary">Guardar apariencia</button></div></form></section><section class="panel"><h2>Copias de seguridad</h2><p class="help">Tus datos se guardan en este navegador y esta dirección. Exporta una copia antes de cambiar de dispositivo o borrar datos del navegador.</p><div class="inline-actions">'+button('Exportar todos los datos','export','','primary')+button('Importar copia','import')+'</div><input type="file" id="backup-file" accept=".json,application/json" hidden><h3>Recuperación</h3><p>'+d.snapshots.length+' instantáneas locales conservadas.</p>'+button('Descargar recuperación inicial','recovery','','quiet')+'</section><section class="panel"><h2>Revisión de datos</h2>'+(issues.length?issues.map(x=>'<p class="notice">'+esc(x.message)+' · Registro '+esc(x.id)+'</p>').join(''):'<p>No se detectaron referencias rotas, números repetidos ni excesos de cobro en la revisión automática.</p>')+'</section><section class="panel"><h2>TallerOS '+VERSION+'</h2><p>Dirección actual</p><p class="url">'+esc(location.origin+location.pathname)+'</p>'+button('Instalar en el teléfono','install')+'</section>');
 }
 function invoiceMarkup(i){
   return '<article class="receipt"><header class="receipt-header">'+(i.workshop.logoData?'<img src="'+esc(i.workshop.logoData)+'" alt="Logo">':'')+'<div><h1>'+esc(i.workshop.name||'RevivAuto')+'</h1><p>'+esc(i.workshop.address)+'</p><p>'+esc(i.workshop.phone)+'</p></div><div><strong>COMPROBANTE INTERNO</strong><p>'+esc(i.number)+'</p><p>Orden '+esc(i.orderNumber)+'</p><p>'+date(i.issuedAt)+'</p></div></header><hr><h2>'+esc(i.client.name)+'</h2><p>'+esc(i.client.phone)+'</p><p>'+esc([i.vehicle.brand,i.vehicle.model,i.vehicle.year].filter(Boolean).join(' '))+' · '+esc(i.vehicle.plate||'Sin placa')+'</p><h2>Trabajos realizados</h2><ul>'+i.works.map(w=>'<li>'+esc(w.description)+'</li>').join('')+'</ul>'+row('Precio total',money(i.total))+'<h2>Abonos y pago final</h2>'+i.payments.map(p=>row((p.final?'Pago final':'Abono')+' · '+date(p.date)+' · '+esc(p.method),money(p.amount))).join('')+'<div class="receipt-total">'+row('Total pagado',money(i.paid))+row('Balance',money(i.balance))+'</div>'+row('Fecha de entrada',date(i.entryDate))+row('Fecha de entrega',date(i.closedAt))+(i.notes?'<p>'+esc(i.notes)+'</p>':'')+(i.supersededAt?'<p>Esta orden fue reabierta después de emitir este comprobante.</p>':'')+'<footer>Comprobante interno de servicio y pago · No es un comprobante fiscal.</footer></article>';
@@ -127,7 +144,7 @@ function orderForm(orderId){
 }
 function partForm(partId,orderId){
   const p=partId?find(d,'parts',partId):{};
-  openDialog(partId?'Pieza / trabajo':'Agregar pieza',field('Descripción','description',p.description,'text','required')+select('Proceso','status',STAGES,p.status||'Pendiente')+select('Responsable de producción','employeeId',[['','Sin asignar'],...d.employees.filter(e=>e.active!==false||e.id===p.employeeId).map(e=>[e.id,e.name])],p.employeeId)+field('Precio de referencia de la pieza','price',p.price||0,'number')+'<p class="help full">El responsable de producción no genera un pago por sí solo. Usa “Asignar empleado” para registrar la mano de obra.</p>'+(partId?button('Archivar pieza','part-archive',p.id,'quiet danger-text'):''),'part',{id:partId,orderId:p.orderId||orderId},'Guardar pieza');
+  openDialog(partId?'Editar pieza/trabajo':'Agregar pieza',field('Descripción','description',p.description,'text','required')+select('Proceso','status',STAGES,p.status||'Pendiente')+select('Responsable de producción','employeeId',[['','Sin asignar'],...d.employees.filter(e=>e.active!==false||e.id===p.employeeId).map(e=>[e.id,e.name])],p.employeeId)+'<details class="full"><summary>Datos adicionales</summary>'+field('Precio de referencia de la pieza','price',p.price||0,'number')+'</details>'+'<p class="help full">El responsable de producción no genera un pago por sí solo. Usa “Asignar empleado” para registrar la mano de obra.</p>','part',{id:partId,orderId:p.orderId||orderId},'Guardar pieza');
 }
 function costForm(orderId,costId){
   const c=costId?find(d,'costs',costId):{};
@@ -157,7 +174,7 @@ function filterCards(){
   }
 }
 async function render(){
-  d=await service.state();[route,id]=location.hash.slice(1).split('/');route ||= 'home';
+  d=await service.state();applyAppearance();[route,id]=location.hash.slice(1).split('/');route ||= 'home';
   if(route==='home')home();else if(route==='orders')shell('Órdenes',searchBar('Buscar REV, cliente, vehículo o placa')+'<div class="cards">'+(d.orders.filter(active).map(o=>orderCard(o)).join('')||empty('No hay órdenes activas.'))+'</div>',button('Nueva orden','order-new','','primary'));
   else if(route==='order')orderPage();else if(route==='production')production();else if(route==='history')history();else if(route==='clients')clients();else if(route==='client')clientPage();else if(route==='employees')employees();else if(route==='employee')employeePage();else if(route==='inventory')inventory();else if(route==='product')productPage();else if(route==='monthly')monthPage();else if(route==='settings')settings();
   else if(route==='finance')shell('Finanzas','<p class="help">Precio acordado, dinero cobrado y costos se consultan en una única vista de rentabilidad dentro de cada orden.</p><div class="cards">'+d.orders.filter(o=>!trashed(o)).map(o=>orderCard(o,closed(o))).join('')+'</div>');
@@ -181,6 +198,18 @@ async function handleAction(action,target){
   if(action==='vehicle-from-order'){const c=dialog.querySelector('[name="clientId"]')?.value;vehicleForm(null,c);return;}
   if(action==='employee-new'||action==='employee-edit'){employeeForm(action==='employee-edit'?target:null);return;}
   if(action==='part-new'||action==='part-edit'){partForm(action==='part-edit'?target:null,action==='part-new'?target:null);return;}
+  if(action==='part-menu'){
+    const p=find(d,'parts',target);
+    openDialog(p.description,'<div class="menu-list">'+button('Editar pieza/trabajo','part-edit',p.id)+(p.status==='Terminada'?button('Reabrir pieza','part-reopen',p.id):'')+button('Eliminar pieza/trabajo','part-remove',p.id,'quiet danger-text')+'</div>');return;
+  }
+  if(action==='part-remove'){
+    const p=find(d,'parts',target),related=(p.laborAssignments||[]).length||n(p.laborCost)||n(p.materialCost)||n(p.otherCost)||d.ledgerAccruals.some(a=>Number(a.partId)===Number(p.id))||d.costs.some(c=>Number(c.partId)===Number(p.id));
+    confirmAction('¿Eliminar esta pieza/trabajo de la orden?','<p>'+esc(p.description)+'</p>'+(related?'<p class="notice">Esta pieza tiene asignaciones o costos relacionados. Se retirará de producción, pero sus asignaciones, costos, devengos y pagos se conservan. Esta acción no anula importes ni modifica el saldo del empleado.</p>':'<p>Se retirará de los trabajos de la orden.</p>')+'<p class="help">Podrás recuperarla desde “Piezas retiradas”.</p>','part-remove-confirm',target,'Eliminar');return;
+  }
+  if(action==='part-reopen-confirm'){
+    const p=find(d,'parts',target);
+    await service.savePart({...p,status:'Preparación'},p.id);dialog.close();await render();toast('Pieza reabierta. Devengos y pagos conservados.');return;
+  }
   if(action==='pay'){paymentForm(target);return;}
   if(action==='payment-edit'){const p=find(d,'payments',target);paymentForm(p.orderId,p.id);return;}
   if(action==='cost-new'||action==='cost-edit'){const c=action==='cost-edit'?find(d,'costs',target):null;costForm(c?.orderId||target,c?.id);return;}
@@ -226,7 +255,7 @@ async function handleAction(action,target){
     'payment-void':['Anular abono','El registro se conserva; dejará de reducir el saldo.','payment-void-confirm','Anular abono'],
     'cost-void':['Anular costo','El registro se conserva; dejará de afectar la rentabilidad.','cost-void-confirm','Anular costo'],
     'employee-payment-void':['Anular pago','El saldo del empleado volverá a quedar pendiente. No cambia el costo del trabajo.','employee-payment-void-confirm','Anular pago'],
-    'part-archive':['Archivar pieza','La pieza sale del trabajo pendiente. Sus costos y asignaciones se conservan.','part-archive-confirm','Archivar pieza']
+    'part-reopen':['Reabrir pieza','Volverá a Preparación. Sus devengos y pagos se conservan; terminarla otra vez no generará un devengo duplicado.','part-reopen-confirm','Reabrir']
   };
   if(confirmMap[action]){const [title,body,next,label]=confirmMap[action];confirmAction(title,body,next,target,label);return;}
   const mutations={
@@ -236,7 +265,7 @@ async function handleAction(action,target){
     'payment-void-confirm':()=>service.voidMovement('payments',target),'payment-restore':()=>service.voidMovement('payments',target,true),
     'cost-void-confirm':()=>service.voidMovement('costs',target),'cost-restore':()=>service.voidMovement('costs',target,true),
     'employee-payment-void-confirm':()=>service.voidMovement('ledgerPayments',target),
-    'part-archive-confirm':()=>service.archive('parts',target),'part-restore':()=>service.archive('parts',target,true),
+    'part-remove-confirm':()=>service.archive('parts',target),'part-restore':()=>service.archive('parts',target,true),
     'client-archive':()=>service.archive('clients',target),'client-restore':()=>service.archive('clients',target,true),
     'vehicle-archive':()=>service.archive('vehicles',target),'vehicle-restore':()=>service.archive('vehicles',target,true)
   };
@@ -272,6 +301,7 @@ document.addEventListener('submit',async event=>{
       case 'product':saved=await service.saveProduct(v,c.id);destination='product/'+saved.id;break;
       case 'inventory-move':await service.inventoryMove(c.id,{...v,kind:c.kind});break;
       case 'settings':await service.settings(v);break;
+      case 'appearance':await service.settings({appearance:v});break;
     }
     dialog.close();await render();if(destination)navigate(destination);toast('Guardado correctamente.');
   }catch(error){const errorEl=form.querySelector('.form-error');if(errorEl)errorEl.textContent=error.message;else toast(error.message);}

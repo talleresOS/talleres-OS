@@ -1,0 +1,48 @@
+import assert from 'node:assert/strict';
+import {execFileSync} from 'node:child_process';
+import {readFile,writeFile,mkdir} from 'node:fs/promises';
+import {createServer} from 'node:http';
+import path from 'node:path';
+import {fileURLToPath,pathToFileURL} from 'node:url';
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..'),out=process.env.TALLEROS_TEST_OUTPUT||path.join(root,'.test-results');
+await mkdir(out,{recursive:true});
+const {chromium}=await import(process.env.TALLEROS_PLAYWRIGHT?pathToFileURL(process.env.TALLEROS_PLAYWRIGHT).href:'playwright');
+const names=['index.html','app.js','styles.css','domain.mjs','storage.mjs','service.mjs','pwa.js','sw.js','version.json','manifest.json','manifest.webmanifest','icon.svg','icon-192.png','icon-512.png','apple-touch-icon.png'];
+const previous=Object.fromEntries(names.map(name=>[name,execFileSync('git',['show','v2.1.0:'+name],{cwd:root})]));
+let old=true;
+const server=createServer(async(req,res)=>{try{const name=new URL(req.url,'http://localhost').pathname.slice(1)||'index.html';if(!names.includes(name))throw Error('path');res.setHeader('cache-control','no-cache');res.setHeader('content-type',({'.html':'text/html','.js':'application/javascript','.mjs':'application/javascript','.css':'text/css','.json':'application/json','.png':'image/png','.svg':'image/svg+xml','.webmanifest':'application/manifest+json'})[path.extname(name)]);res.end(old?previous[name]:await readFile(path.join(root,name)));}catch{res.writeHead(404);res.end();}});
+await new Promise(r=>server.listen(0,'127.0.0.1',r));const origin='http://localhost:'+server.address().port;
+const browser=await chromium.launch({headless:true,executablePath:process.env.TALLEROS_BROWSER||'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'});
+const ctx=await browser.newContext();let p=await ctx.newPage();p.setDefaultTimeout(15000);
+try{
+ await p.goto(origin+'/index.html');await p.locator('.top').waitFor();
+ await p.evaluate(()=>navigator.serviceWorker.ready.then(()=>true));await p.reload();await p.locator('.top').waitFor();
+ const before=await p.evaluate(async()=>{
+  const {TallerService}=await import('./service.mjs'),s=new TallerService();await s.init();
+  const c=await s.saveClient({name:'Migración desde 2.1.0',phone:'8095550123'}),v=await s.saveVehicle({clientId:c.id,brand:'Lexus',model:'RX'});
+  const e=await s.saveEmployee({name:'David',pieceRate:500});
+  const o=await s.saveOrder({clientId:c.id,vehicleId:v.id,total:10000,entryDate:'2026-09-30'});
+  const part=await s.savePart({orderId:o.id,description:'Cinco piezas originales',status:'Preparación'});
+  await s.assign(part.id,{employeeId:e.id,quantity:5,rate:500,mode:'Por pieza'});await s.finishPart(part.id);
+  const d=await s.state();await s.employeePayment(d.ledgerAccounts[0].id,{amount:1000,date:'2026-09-30',method:'Efectivo'});
+  await s.payment(o.id,{amount:3000,date:'2026-09-30',method:'Transferencia'});await s.settings({painterRate:654,logoData:'data:image/png;base64,iVBORw0KGgo='});
+  return s.state();
+ });
+ old=false;
+ await p.evaluate(async()=>{const r=await navigator.serviceWorker.getRegistration();await r.update();});
+ await p.waitForFunction(async()=>!!(await navigator.serviceWorker.getRegistration())?.waiting);
+ await p.close();p=await ctx.newPage();p.setDefaultTimeout(15000);
+ await p.goto(origin+'/index.html');await p.locator('.top').waitFor();
+ await p.waitForFunction(async()=>{const keys=await caches.keys();return keys.includes('talleros-phase2-2.2.0')&&!keys.includes('talleros-phase2-2.1.0');});
+ const after=await p.evaluate(async()=>{const {TallerService}=await import('./service.mjs');return new TallerService().state();});
+ assert.deepEqual(after,before);
+ await p.goto(origin+'/index.html#settings');await p.getByRole('heading',{name:'Apariencia',exact:true}).waitFor();
+ await p.getByLabel('Tema',{exact:true}).selectOption('light');await p.getByRole('button',{name:'Guardar apariencia',exact:true}).click();
+ await p.waitForFunction(()=>document.documentElement.dataset.theme==='light');
+ await ctx.setOffline(true);await p.reload();await p.getByRole('heading',{name:'Apariencia',exact:true}).waitFor();
+ assert.equal(await p.locator('html').getAttribute('data-theme'),'light');
+ const final=await p.evaluate(async()=>{const {TallerService}=await import('./service.mjs');return new TallerService().state();});
+ assert.equal(final.parts[0].laborAssignments[0].total,2500);assert.equal(final.ledgerAccounts[0].balance,1500);assert.equal(final.payments[0].amount,3000);assert.equal(final.settings[0].painterRate,654);
+ const result={status:'passed',from:'2.1.0',to:'2.2.0',identicalDataAfterUpgrade:true,offline:true,themePersisted:true,employeeTotal:2500,employeePaid:1000,employeeBalance:1500,customerPaid:3000};
+ await writeFile(path.join(out,'ui-upgrade-results.json'),JSON.stringify(result,null,2));console.log('PASS Actualización 2.1.0 → 2.2.0: todos los registros idénticos; tema y datos disponibles offline.');
+}finally{await browser.close();await new Promise(r=>server.close(r));}

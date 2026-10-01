@@ -1,4 +1,4 @@
-export const VERSION = '2.1.0';
+export const VERSION = '2.2.0';
 export const MAIN = ['settings','clients','vehicles','orders','parts','employees','payments','costs'];
 export const EXTRA = ['ledgerAccounts','ledgerAccruals','ledgerPayments','invoices','inventory','inventoryMoves','events','monthlyClosures','meta','snapshots'];
 export const STORES = [...MAIN,...EXTRA];

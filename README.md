@@ -4,7 +4,7 @@ Aplicación existente, actualizada a Fase 2. Identidad oscura/dorada y operació
 
 URL estable: https://talleresos.github.io/talleres-OS/index.html
 Repositorio: https://github.com/talleresOS/talleres-OS
-Versión del código: 2.1.0.
+Versión del código: 2.2.0.
 
 ## Datos
 
@@ -22,6 +22,14 @@ Al abrir Fase 2 por primera vez:
 El libro auxiliar original queda intacto. Las operaciones nuevas se guardan juntas en la base principal. Los backups v2 incluyen todos los módulos nuevos; las copias v1 pueden importarse en instalaciones que no contienen módulos nuevos, con recuperación previa.
 
 Una orden histórica entregada sin fecha queda en Historial como “Fecha no registrada”. No se inventa fecha ni un pago. Si tiene saldo previo, se señala en la revisión de datos.
+
+## Apariencia y piezas (2.2.0)
+
+Configuración → Apariencia permite elegir tema claro/oscuro y colores principal/acento. Se guardan en settings.appearance de la base existente; no hay cambio de esquema ni migración adicional. El logo y la tarifa histórica del pintor permanecen almacenados; esta última ya no aparece en datos generales.
+
+Cada pieza conserva Terminar y Asignar empleado. El menú ••• reúne Editar, Reabrir y Eliminar. Eliminar es reversible: usa el archivo existente y agrupa la pieza en Piezas retiradas; deja de aparecer en producción. Si tiene asignaciones o costos, la confirmación avisa que se conservan todos sus importes y pagos. No es una anulación contable. La edición conserva el precio de referencia en Datos adicionales.
+
+Reabrir devuelve la pieza a Preparación mediante la edición existente. No revierte pagos ni devengos; terminar nuevamente reutiliza el devengo original sin duplicarlo.
 
 ## Operación
 
@@ -61,3 +69,5 @@ No volver directamente al código MVP v1 después de migrar: el esquema conserva
 tests/phase2.mjs recorre los diez casos solicitados en un navegador Chromium/Edge aislado, con datos sintéticos basados en el esquema real. Prueba migración v1, importación, concurrencia, facturas sin costos, persistencia al reiniciar navegador y anchos 360/390/430/1280.
 
 No afirma haber leído los datos privados del teléfono de RevivAuto. Los datos reales no están dentro de GitHub.
+
+Pruebas de esta actualización: node tests/ui-refresh.mjs y node tests/ui-upgrade.mjs. La segunda necesita el tag v2.1.0 del repositorio para simular la actualización desde la versión anterior. Incluyen cantidad × tarifa, edición, reapertura, retiro/restauración, temas, logo, cierre del navegador y actualización PWA offline. Los tamaños móviles se prueban en Edge/Chromium; no sustituyen una revisión en un iPhone físico.

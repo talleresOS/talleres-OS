@@ -254,6 +254,12 @@ export class TallerService {
     });
   }
   async settings(v){
-    return this.change(d=>{const s=d.settings[0];for(const key of ['name','phone','whatsapp','email','address','document','prefix'])if(v[key]!==undefined)s[key]=text(v[key]);if(v.logoData!==undefined)s.logoData=v.logoData;if(v.painterRate!==undefined)s.painterRate=amount(v.painterRate||0,true);});
+    return this.change(d=>{const s=d.settings[0];for(const key of ['name','phone','whatsapp','email','address','document','prefix'])if(v[key]!==undefined)s[key]=text(v[key]);if(v.logoData!==undefined)s.logoData=v.logoData;if(v.painterRate!==undefined)s.painterRate=amount(v.painterRate||0,true);
+      if(v.appearance!==undefined){
+        const a=v.appearance;
+        assert(a&&['dark','light'].includes(a.theme),'Selecciona un tema válido.');
+        assert(/^#[0-9a-f]{6}$/i.test(a.primary)&&/^#[0-9a-f]{6}$/i.test(a.accent),'Selecciona colores válidos.');
+        s.appearance={theme:a.theme,primary:a.primary.toLowerCase(),accent:a.accent.toLowerCase()};
+      }});
   }
 }

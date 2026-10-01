@@ -4,3 +4,5 @@ TallerOS-copia-*.json
 
 .test-results/
 node_modules/
+
+dist/
