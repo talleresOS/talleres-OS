@@ -1,4 +1,7 @@
 import {Storage} from './storage.mjs';
+import {workMethods} from './work-service.mjs';
+import {catalog,worksFor,PROCESSES} from './work-model.mjs';
+import {customerReception} from './domain.mjs';
 import {STORES,MAIN,n,round,sum,uid,today,validDate,find,belongs,active,closed,cancelled,trashed,finished,balance,paid,financial,customerInvoice,refreshAccounts,monthly,suffix,METHODS,STAGES,audit} from './domain.mjs';
 const assert=(test,message)=>{if(!test)throw Error(message);};
 const amount=(value,zero=false)=>{const v=Number(value);assert(Number.isFinite(v)&&(zero?v>=0:v>0),'Indica un monto válido.');return round(v);};
@@ -55,18 +58,48 @@ export class TallerService {
   }
   async saveOrder(v,id){
     return this.change(d=>{
+      if(!id&&v.creationToken){const existing=d.orders.find(o=>o.creationToken===v.creationToken);if(existing)return existing;}
       const client=find(d,'clients',v.clientId),vehicle=find(d,'vehicles',v.vehicleId);
       assert(client&&vehicle&&Number(vehicle.clientId)===Number(client.id),'Selecciona un cliente y su vehículo.');
       assert(!client.archived&&!vehicle.archived||!!id,'El cliente o vehículo está archivado.');
       const old=id?this.order(d,id):null;
       const total=amount(v.total||0,true);if(old)assert(total>=paid(d,old.id),'El precio no puede ser menor que lo ya cobrado.');
       const fields={clientId:Number(v.clientId),vehicleId:Number(v.vehicleId),entryDate:this.date(v.entryDate),dueDate:v.dueDate?this.date(v.dueDate):'',total,notes:text(v.notes),customerNotes:text(v.customerNotes)};
-      if(old){Object.assign(old,fields);this.event(d,'order-edited',old.id,'Datos de la orden actualizados.');return old;}
+      for(const key of ['workConditions','receptionNotes'])if(v[key]!==undefined)fields[key]=text(v[key]);
+      if(v.createReception)assert(fields.dueDate,'Selecciona la fecha estimada de entrega.');
+      if(fields.dueDate&&(!old||fields.dueDate!==old.dueDate||fields.entryDate!==old.entryDate))assert(fields.dueDate>=fields.entryDate,'La entrega prevista no puede ser anterior a la recepción.');
+      if(old){this.recordPrice(d,old,total,'Edición del precio de la orden');Object.assign(old,fields);this.event(d,'order-edited',old.id,'Datos de la orden actualizados.');return old;}
       const s=d.settings[0],sequence=Math.max(n(s.orderSequence),...d.orders.map(o=>suffix(o.number)))+1;
       assert(Number.isSafeInteger(sequence),'No se pudo reservar el número de orden.');
       s.orderSequence=sequence;
       const prefix=text(s.prefix||'REV').toUpperCase().replace(/[^A-Z0-9-]/g,'')||'REV';
-      const row=this.add(d,'orders',{...fields,number:prefix+'-'+String(sequence).padStart(4,'0'),status:'Activa',lifecycle:'active',createdAt:new Date().toISOString()});
+      const row=this.add(d,'orders',{...fields,workModelVersion:3,priceHistory:[],agreementHistory:[],number:prefix+'-'+String(sequence).padStart(4,'0'),status:'Activa',lifecycle:'active',createdAt:new Date().toISOString()});
+      if(v.creationToken)row.creationToken=text(v.creationToken);
+      if(v.createReception){
+        assert(Array.isArray(v.receptionPieces),'Revisa las piezas y procesos.');
+        const groups=new Map();
+        for(const item of v.receptionPieces){
+          assert(text(item.name)&&text(item.name).length<=100&&Array.isArray(item.processes)&&item.processes.length,'Cada pieza necesita un nombre y al menos un proceso.');
+          assert(item.processes.every(p=>PROCESSES.includes(p)),'Proceso inválido.');
+          assert(!groups.has(text(item.name).toLocaleLowerCase()),'Una pieza está repetida. Selecciona sus procesos en una misma fila.');
+          groups.set(text(item.name).toLocaleLowerCase(),true);
+          const known=catalog(s).find(p=>p.name===text(item.name));
+          const piece=this.add(d,'vehiclePieces',{orderId:row.id,catalogId:known?.id||'custom-'+uid(),name:text(item.name),retired:false,createdAt:row.createdAt});
+          if(!known)(s.customPieces ||= []).push({id:piece.catalogId,name:piece.name});
+          for(const process of new Set(item.processes)){
+            let work=d.workAssignments.find(w=>belongs(w,row.id)&&w.process===process);
+            if(!work)work=this.add(d,'workAssignments',{orderId:row.id,process,employeeId:null,selectedPieceIds:[],unspecifiedQuantity:0,quantity:0,mode:'Por pieza',rate:0,total:0,role:'',notes:'',sourceAssignmentId:uid(),status:'Pendiente',ledgerState:'unassigned',cancelled:false,createdAt:row.createdAt});
+            work.selectedPieceIds.push(piece.id);work.quantity=work.selectedPieceIds.length;
+          }
+        }
+        const initial=amount(v.initialAmount||0,true);assert(initial<=total,'El abono inicial supera el precio acordado.');
+        if(initial){
+          assert(METHODS.includes(v.initialMethod),'Selecciona el método del abono.');
+          const payment=this.add(d,'payments',{orderId:row.id,amount:initial,date:this.date(v.initialDate||fields.entryDate),method:v.initialMethod,note:'Abono inicial',kind:'initial',voided:false,createdAt:row.createdAt});
+          row.initialPaymentId=payment.id;this.event(d,'client-payment',row.id,'Abono inicial: '+initial,{paymentId:payment.id});
+        }
+        row.initialReceipt=customerReception(d,row);
+      }
       this.event(d,'order-created',row.id,'Orden creada.');return row;
     });
   }
@@ -120,7 +153,7 @@ export class TallerService {
     });
   }
   async markFinished(id){
-    return this.change(d=>{const o=this.order(d,id);assert(d.parts.filter(p=>belongs(p,id)&&!p.archived).every(p=>p.status==='Terminada'),'Todavía hay piezas pendientes.');o.lifecycle='finished';o.workCompletedAt ||= new Date().toISOString();this.event(d,'work-finished',o.id,'Trabajo terminado; la entrega sigue pendiente.');});
+    return this.change(d=>{const o=this.order(d,id);assert(worksFor(d,id).every(w=>w.status==='Terminado')&&d.parts.filter(p=>belongs(p,id)&&!p.archived&&!d.workAssignments.some(w=>w.legacyPartId===p.id)).every(p=>p.status==='Terminada'),'Todavía hay trabajos pendientes.');o.lifecycle='finished';o.workCompletedAt ||= new Date().toISOString();this.event(d,'work-finished',o.id,'Trabajo terminado; la entrega sigue pendiente.');});
   }
   async payment(orderId,v,id){
     return this.change(d=>{
@@ -160,17 +193,29 @@ export class TallerService {
       p[restore?'restoredAt':'voidedAt']=new Date().toISOString();
     });
   }
-  async closeOrder(id){
+  async closeOrder(id,details){
     return this.change(d=>{
       const existing=this.order(d,id,false);
       if(closed(existing))return find(d,'invoices',existing.invoiceId);
       const o=this.order(d,id);
       assert(finished(d,o),'Termina los trabajos antes de entregar.');
       assert(balance(d,o)===0,'Todavía hay saldo pendiente.');
+      assert(!o.agreementStale,'Confirma una nueva cotización con el precio actual antes de entregar.');
       assert(paid(d,o.id)<=n(o.total)+0.005,'Revisa el exceso de pago antes de cerrar.');
+      if(details){
+        assert(['yes','no'].includes(details.hasWarranty),'Indica si el trabajo tiene garantía.');
+        const has=details.hasWarranty==='yes';
+        if(has){
+          assert(text(details.warrantyDuration),'Indica la duración de la garantía.');
+          const start=this.date(details.warrantyStart),end=this.date(details.warrantyEnd);
+          assert(end>=start,'El vencimiento no puede ser anterior al inicio.');
+          o.warranty={kind:'custom',label:text(details.warrantyDuration),startDate:start,endDate:end,conditions:text(details.warrantyConditions)};
+        }else o.warranty={kind:'none'};
+        o.customerNotes=text(details.finalNotes);o.warrantyReviewedAt=new Date().toISOString();
+      }
       const at=new Date().toISOString(),setting=d.settings[0];
       setting.invoiceSequence=n(setting.invoiceSequence)+1;
-      const invoice=customerInvoice(d,o,'REV-C-'+String(setting.invoiceSequence).padStart(6,'0'),at);
+      const invoice=customerInvoice(d,o,(text(setting.prefix||'ORD').toUpperCase().replace(/[^A-Z0-9-]/g,'')||'ORD')+'-C-'+String(setting.invoiceSequence).padStart(6,'0'),at);
       d.invoices.push(invoice);o.lifecycle='closed';o.status='Cerrada / Entregada';o.closedAt=at;o.invoiceId=invoice.id;o.deliveryDate=today();o.closureFinancial=financial(d,o);
       this.event(d,'order-closed',o.id,'Orden finalizada y entregada. Comprobante '+invoice.number);return invoice;
     });
@@ -187,7 +232,7 @@ export class TallerService {
   async trash(id){
     return this.change(d=>{
       const o=this.order(d,id);
-      assert(!d.payments.some(x=>belongs(x,id))&&!d.costs.some(x=>belongs(x,id))&&!d.parts.some(x=>belongs(x,id))&&!d.invoices.some(x=>belongs(x,id)),'Esta orden tiene historial. Puedes cancelarla para conservarlo.');
+      assert(!d.payments.some(x=>belongs(x,id))&&!d.costs.some(x=>belongs(x,id))&&!d.parts.some(x=>belongs(x,id))&&!d.invoices.some(x=>belongs(x,id))&&!d.workAssignments.some(x=>belongs(x,id))&&!d.vehiclePieces.some(x=>belongs(x,id))&&!d.quotations.some(x=>belongs(x,id)),'Esta orden tiene historial. Puedes cancelarla para conservarlo.');
       o.deleted=true;o.deletedAt=new Date().toISOString();o.deletedPreviousStatus=o.status;this.event(d,'order-trashed',o.id,'Orden vacía enviada a papelera.');
     });
   }
@@ -250,7 +295,7 @@ export class TallerService {
     return this.change(d=>{
       const existing=d.monthlyClosures.find(x=>x.month===month);if(existing)return existing;
       const metrics=monthly(d,month);
-      return this.add(d,'monthlyClosures',{month,closedAt:new Date().toISOString(),metrics,source:structuredClone(Object.fromEntries(['orders','parts','payments','costs','ledgerAccruals','ledgerPayments','inventoryMoves'].map(s=>[s,d[s]])))});
+      return this.add(d,'monthlyClosures',{month,closedAt:new Date().toISOString(),metrics,source:structuredClone(Object.fromEntries(['orders','parts','vehiclePieces','workAssignments','payments','costs','ledgerAccruals','ledgerPayments','inventoryMoves','quotations'].map(s=>[s,d[s]])))});
     });
   }
   async settings(v){
@@ -259,7 +304,25 @@ export class TallerService {
         const a=v.appearance;
         assert(a&&['dark','light'].includes(a.theme),'Selecciona un tema válido.');
         assert(/^#[0-9a-f]{6}$/i.test(a.primary)&&/^#[0-9a-f]{6}$/i.test(a.accent),'Selecciona colores válidos.');
-        s.appearance={theme:a.theme,primary:a.primary.toLowerCase(),accent:a.accent.toLowerCase()};
-      }});
+        s.appearance={...s.appearance,theme:a.theme,primary:a.primary.toLowerCase(),accent:a.accent.toLowerCase(),mode:a.mode==='auto'?'auto':'manual'};
+      }
+
+      if(v.palette!==undefined){
+        assert(Array.isArray(v.palette)&&v.palette.length<=5&&v.palette.every(x=>/^#[0-9a-f]{6}$/i.test(x)),'Paleta inválida.');
+        s.palette=v.palette;s.paletteLogo=v.paletteLogo||null;
+      }
+      if(v.fullCarPieceIds!==undefined){
+        assert(Array.isArray(v.fullCarPieceIds)&&v.fullCarPieceIds.length>0&&v.fullCarPieceIds.every(id=>catalog(s).some(p=>p.id===id)),'Selecciona las piezas de carro completo.');
+        s.fullCarPieceIds=[...new Set(v.fullCarPieceIds)];
+      }
+      if(v.warranty!==undefined){
+        const w=v.warranty;assert(w&&['none','months','custom'].includes(w.kind),'Garantía inválida.');
+        if(w.kind==='months')assert([3,6,12].includes(Number(w.months)),'Duración de garantía inválida.');
+        if(w.kind==='custom')assert(text(w.label),'Describe la garantía personalizada.');
+        s.warranty={kind:w.kind,months:w.kind==='months'?Number(w.months):null,label:w.kind==='custom'?text(w.label):'',conditions:text(w.conditions)};
+      }
+      if(v.quoteConditions!==undefined)s.quoteConditions=text(v.quoteConditions);
+    });
   }
 }
+Object.assign(TallerService.prototype,workMethods);

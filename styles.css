@@ -12,7 +12,7 @@ body{background:radial-gradient(ellipse at top right,color-mix(in srgb,var(--acc
 .bottom a{border-radius:9px}
 .brand-mark{background:var(--primary);color:var(--on-primary);box-shadow:0 3px 8px #0002}
 .btn{border-color:var(--line);box-shadow:0 2px 0 #0002,inset 0 1px 0 #ffffff0b;transition:transform .12s ease,box-shadow .12s ease,filter .12s ease}
-.btn.primary{background:linear-gradient(#ffffff12,#00000009),var(--primary);color:var(--on-primary);border-color:color-mix(in srgb,var(--primary) 78%,#000);box-shadow:0 3px 0 color-mix(in srgb,var(--primary) 45%,#000),0 6px 12px #0002,inset 0 1px 0 #ffffff45}
+.btn.primary{background:var(--primary);color:var(--on-primary);border-color:color-mix(in srgb,var(--primary) 78%,#000);box-shadow:0 3px 0 color-mix(in srgb,var(--primary) 45%,#000),0 6px 12px #0002,inset 0 1px 0 #ffffff45}
 .btn.quiet{box-shadow:none;color:var(--gold)}
 .btn:active:not(:disabled){transform:translateY(2px);box-shadow:inset 0 1px 3px #0002}
 .btn.primary:active:not(:disabled){box-shadow:0 1px 0 color-mix(in srgb,var(--primary) 45%,#000)}
@@ -46,6 +46,41 @@ dialog::backdrop{background:#081321aa;backdrop-filter:blur(4px)}
 .removed-parts .help{margin:4px 0}
 .appearance-panel .eyebrow{color:var(--accent-ink)}
 #toast{background:var(--text);color:var(--bg);border-color:var(--line)}
-@media(hover:hover){.btn:hover:not(:disabled){filter:brightness(1.06)}.btn.quiet:hover{background:var(--primary-soft)}.card-link:hover h3{color:var(--gold)}}
+@media(hover:hover){.btn:hover:not(:disabled){filter:none;outline:1px solid var(--gold);outline-offset:1px}.btn.quiet:hover{background:var(--primary-soft)}.card-link:hover h3{color:var(--gold)}}
 @media(max-width:800px){.piece-card{padding:14px}.piece-actions .compact{min-height:44px;padding:8px 11px}.bottom{box-shadow:0 -6px 22px #0000000c}.appearance-panel .form{grid-template-columns:repeat(2,minmax(0,1fr))}.appearance-panel .field:first-child{grid-column:1/-1}.piece-card h3{font-size:1rem}}
 @media(prefers-reduced-motion:reduce){.btn{transition:none}}
+/* Physical pieces, process cards and documents (same mobile shell). */
+.piece-picker{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;max-height:300px;overflow:auto;padding:4px;margin:8px 0;overscroll-behavior:contain}
+.piece-choice{display:flex;gap:9px;align-items:center;min-height:52px;border:1px solid var(--line);border-radius:10px;padding:10px;background:var(--input);font-size:.875rem;cursor:pointer;overflow-wrap:anywhere}
+.piece-choice:has(input:checked){background:var(--primary-soft);border-color:var(--gold);box-shadow:inset 0 0 0 1px var(--gold)}
+.piece-choice input{appearance:auto;width:20px;height:20px;min-height:20px;flex:0 0 20px;margin:0;padding:0;accent-color:var(--primary)}
+.piece-choice span{min-width:0}.selection-count{font-size:.875rem;color:var(--accent-ink);margin:10px 0}
+.custom-piece{display:grid;gap:10px;margin-top:14px}.custom-pieces{display:grid;gap:8px;margin-top:8px}
+.work-total{border:1px solid var(--gold);padding:14px;border-radius:12px;background:var(--primary-soft);display:grid;gap:4px}
+.work-total span{font-size:.75rem;letter-spacing:.08em}.work-total strong{font-size:1.6rem}.work-card p{margin:8px 0}.work-card .split{margin-bottom:5px}.work-card h3{min-width:0;overflow-wrap:anywhere}.work-card .badge{flex-shrink:0}
+.piece-names{margin:8px 0;padding-left:20px;font-size:.875rem;color:var(--muted)}.piece-names li{overflow-wrap:anywhere;margin:3px 0}.more-pieces summary{padding:4px 0;color:var(--gold);font-size:.8125rem}
+.brand-logo{width:42px;height:42px;object-fit:contain;border-radius:8px;background:#fff}.home-logo{max-width:150px;max-height:70px;object-fit:contain;display:block;margin-bottom:12px;background:#fff;border-radius:8px;padding:4px}
+.palette-swatches{display:flex;gap:8px;margin:12px 0}.palette-swatches span{width:32px;height:32px;border-radius:50%;border:1px solid var(--line)}
+.receipt .document-warranty,.receipt .signature-area{border-top:1px solid #bbb;padding-top:12px;break-inside:avoid}.receipt p{white-space:pre-wrap}.receipt li{margin:8px 0;overflow-wrap:anywhere}.signature-area p{line-height:2}
+@media(max-width:390px){.piece-picker{grid-template-columns:1fr;max-height:270px}.work-card .piece-actions{gap:6px}.top:has(.home-logo){align-items:flex-start}}
+[data-form="work-assignment"] .piece-picker{max-height:210px}
+[data-form="work-assignment"] .piece-choice{min-height:44px;padding:8px}
+[data-form="work-assignment"] .work-total{grid-template-columns:1fr auto;align-items:center}
+[data-form="work-assignment"] .work-total strong{font-size:1.35rem}
+[data-form="work-assignment"] .work-total small{grid-column:1/-1}
+.dialog-top{position:sticky;top:-24px;background:var(--panel);z-index:3;padding:6px 0}
+@media(min-width:360px) and (max-width:800px){[data-form="work-assignment"]{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}[data-form="work-assignment"] .dialog-actions{position:sticky;bottom:-22px;background:var(--panel);padding:12px 0;z-index:2;flex-wrap:nowrap}[data-form="work-assignment"] .field>span{font-size:.8125rem}.dialog-top{top:-20px}}
+
+/* Empty areas keep their controls and text above a decorative wordmark. */
+.empty-state{position:relative;isolation:isolate;min-height:150px;display:grid;place-items:center;grid-column:1/-1;overflow:hidden;border-radius:14px}
+.empty-state .empty{position:relative;z-index:1;background:transparent;text-align:center;padding:20px}
+.empty-watermark{position:absolute;z-index:-1;inset:0;display:grid;place-items:center;font-size:clamp(48px,12vw,150px);font-weight:800;letter-spacing:-.07em;opacity:.035;color:var(--text);pointer-events:none;user-select:none}
+.reception-piece{border:1px solid var(--line);border-radius:12px;padding:12px;margin:10px 0}.reception-piece fieldset{border:0;margin:12px 0;padding:0;min-width:0}.reception-piece legend{font-size:.85rem;margin-bottom:8px}.reception-processes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.reception-processes label{display:flex;align-items:center;gap:8px;font-size:.85rem}.reception-processes input{width:18px;height:18px;min-height:18px;flex-shrink:0}.reception-builder{min-width:0}
+@media print{.empty-watermark{display:none!important}}
+main:has(>.workspace-watermark){position:relative;isolation:isolate;min-height:100dvh}.workspace-watermark{position:absolute;z-index:-1;left:0;right:0;bottom:24%;text-align:center;font-size:clamp(64px,13vw,150px);font-weight:800;letter-spacing:-.07em;color:var(--text);opacity:.035;pointer-events:none;user-select:none}.empty-watermark{font-size:clamp(64px,13vw,150px)}
+@media print{.workspace-watermark{display:none!important}}
+/* Long customer/vehicle names must wrap without widening cards or phone screens. */
+main{overflow-wrap:anywhere}main h1,main h2,main h3{overflow-wrap:anywhere;min-width:0}.top>div,.card-link,.card .split>h3{min-width:0}
+.reception-processes label{min-height:44px}
+.update-notice{padding:12px 18px;background:#fff3cd;color:#493600;font-size:14px;line-height:1.5;overflow-wrap:anywhere}
+@media print{.update-notice{display:none!important}}

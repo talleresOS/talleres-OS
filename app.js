@@ -1,4 +1,8 @@
+import {createDocumentUI} from './document-ui.mjs';
 import {TallerService} from './service.mjs';
+import {createWorkUI} from './work-ui.mjs';
+import {worksFor,piecesFor} from './work-model.mjs';
+import {paletteFromLogo,logoKey} from './logo-palette.mjs';
 import {VERSION,n,round,sum,today,day,find,belongs,active,closed,cancelled,trashed,finished,balance,paid,financial,status,employeeSummary,monthly,audit,STAGES,METHODS,CATEGORIES} from './domain.mjs';
 const service=new TallerService(),app=document.querySelector('#app'),dialog=document.querySelector('#dialog');
 const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -7,25 +11,33 @@ const date=x=>x?day(x):'Fecha no registrada';
 const button=(label,action,id='',cls='')=>'<button type="button" class="btn '+cls+'" data-action="'+action+'" data-id="'+esc(id)+'">'+label+'</button>';
 const metric=(label,value)=>'<div class="metric"><span>'+label+'</span><strong>'+value+'</strong></div>';
 const row=(label,value)=>'<div class="row"><span>'+label+'</span><strong>'+value+'</strong></div>';
-const empty=label=>'<p class="empty">'+label+'</p>';
+const empty=label=>'<div class="empty-state"><span class="empty-watermark" aria-hidden="true">TallerOS</span><p class="empty">'+label+'</p></div>';
 const field=(label,name,value='',type='text',extra='')=>'<label class="field"><span>'+label+'</span><input name="'+name+'" type="'+type+'" value="'+esc(value)+'" '+(type==='number'?'min="0" step="0.01" inputmode="decimal" ':'')+extra+'></label>';
 const textarea=(label,name,value='')=>'<label class="field full"><span>'+label+'</span><textarea name="'+name+'" rows="3">'+esc(value)+'</textarea></label>';
 const select=(label,name,options,value,extra='')=>'<label class="field"><span>'+label+'</span><select aria-label="'+esc(label)+'" name="'+name+'" '+extra+'>'+options.map(x=>{const [v,l]=Array.isArray(x)?x:[x,x];return '<option value="'+esc(v)+'" '+(String(v)===String(value)?'selected':'')+'>'+esc(l)+'</option>';}).join('')+'</select></label>';
-let d,route='home',id='',orderTab='work',formContext={},busy=false,selectedMonth=today().slice(0,7),pendingImport=null,previousFocus;
+let d,route='home',id='',orderTab='work',formContext={},busy=false,selectedMonth=today().slice(0,7),pendingImport=null,previousFocus,pendingReception;
 const names={home:'Inicio',orders:'Órdenes',production:'Producción',clients:'Clientes',more:'Más',history:'Historial',employees:'Empleados',inventory:'Inventario',monthly:'Cierre mensual',settings:'Configuración',finance:'Finanzas',trash:'Papelera'};
 const client=o=>find(d,'clients',o.clientId)||{};
 const vehicle=o=>find(d,'vehicles',o.vehicleId)||{};
 const vehicleText=o=>{const v=vehicle(o);return [v.brand,v.model,v.year].filter(Boolean).join(' ')||'Vehículo sin referencia';};
 const badge=label=>'<span class="badge">'+esc(label)+'</span>';
+const workUI=createWorkUI({service,data:()=>d,context:()=>formContext,esc,button,field,select,textarea,row,badge,empty,money,date,openDialog,confirmAction,toast,render,navigate,download});
+const documentUI=createDocumentUI({service,data:()=>d,esc,button,field,select,textarea,row,money,openDialog,render,toast,download});
 // Appearance is presentation-only and persists in the existing settings record.
 const appearanceDefaults={theme:'dark',primary:'#eec567',accent:'#69c9c1'};
 function appearance(){const v=d.settings[0]?.appearance||{};return {theme:v.theme==='light'?'light':'dark',primary:/^#[0-9a-f]{6}$/i.test(v.primary)?v.primary:appearanceDefaults.primary,accent:/^#[0-9a-f]{6}$/i.test(v.accent)?v.accent:appearanceDefaults.accent};}
 function luminance(hex){const rgb=hex.match(/[0-9a-f]{2}/gi).map(x=>parseInt(x,16)/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4);return .2126*rgb[0]+.7152*rgb[1]+.0722*rgb[2];}
 function readableAccent(color,theme){
-  const background=theme==='light'?'#ffffff':'#202936',target=theme==='light'?0:255,b=luminance(background);
+  const background=theme==='light'?'#dddddd':'#3b4b61',target=theme==='light'?0:255,b=luminance(background);
   const rgb=color.slice(1).match(/../g).map(x=>parseInt(x,16));
   for(let step=0;step<=20;step++){const hex='#'+rgb.map(x=>Math.round(x+(target-x)*step/20).toString(16).padStart(2,'0')).join(''),l=luminance(hex);if((Math.max(l,b)+.05)/(Math.min(l,b)+.05)>=4.5)return hex;}
   return theme==='light'?'#000000':'#ffffff';
+}
+async function ensureLogo(force=false){
+  const state=await service.state(),s=state.settings[0];if(!s?.logoData)return;
+  const key=await logoKey(s.logoData);if(!force&&s.paletteLogo===key)return;
+  const result=await paletteFromLogo(s.logoData);
+  await service.settings({palette:result.colors,paletteLogo:key,appearance:{theme:s.appearance?.theme||'dark',primary:result.colors[0],accent:result.colors[1],mode:'auto'}});
 }
 function applyAppearance(){
   const a=appearance(),root=document.documentElement;root.dataset.theme=a.theme;
@@ -37,9 +49,11 @@ function applyAppearance(){
 function toast(message){const t=document.querySelector('#toast');t.textContent=message;t.hidden=false;clearTimeout(toast.timer);toast.timer=setTimeout(()=>t.hidden=true,5000);}
 function navigate(target){dialog.close();if(location.hash==='#'+target)render();else location.hash=target;}
 function shell(title,body,action=''){
+  const sparse=(['home','orders','production'].includes(route)?d.orders.filter(active).length<4:route==='clients'&&d.clients.length<4)&&!body.includes('empty-state');
+  if(sparse)body+='<span class="workspace-watermark" aria-hidden="true">TallerOS</span>';
   const nav=[['home','⌂','Inicio'],['orders','▤','Órdenes'],['production','◇','Producción'],['clients','♙','Clientes'],['more','•••','Más']];
   const selected=route==='order'?'orders':route==='client'?'clients':names[route]&&!['history','employees','inventory','monthly','settings','finance','trash'].includes(route)?route:'more';
-  app.innerHTML='<aside class="sidebar"><a class="brand" href="#home"><span class="brand-mark">T</span><span>Taller<span class="gold">OS</span><small>'+esc(d.settings[0]?.name||'RevivAuto')+'</small></span></a><nav>'+Object.entries(names).filter(([k])=>!['more','trash'].includes(k)).map(([k,l])=>'<a href="#'+k+'" class="'+(route===k?'on':'')+'">'+l+'</a>').join('')+'</nav><small class="version">Fase 2 · '+VERSION+'</small></aside><main><header class="top"><div><p class="eyebrow">'+esc(d.settings[0]?.name||'RevivAuto')+'</p><h1>'+esc(title)+'</h1></div>'+action+'</header>'+body+'</main><nav class="bottom" aria-label="Navegación principal">'+nav.map(([r,icon,label])=>'<a href="#'+r+'" class="'+(selected===r?'on':'')+'" '+(selected===r?'aria-current="page"':'')+'><span aria-hidden="true">'+icon+'</span>'+label+'</a>').join('')+'</nav>';
+  app.innerHTML='<aside class="sidebar"><a class="brand" href="#home">'+(d.settings[0]?.logoData?'<img class="brand-logo" src="'+esc(d.settings[0].logoData)+'" alt="Logo del taller">':'<span class="brand-mark">T</span>')+'<span>Taller<span class="gold">OS</span><small>'+esc(d.settings[0]?.name||'Mi taller')+'</small></span></a><nav>'+Object.entries(names).filter(([k])=>!['more','trash'].includes(k)).map(([k,l])=>'<a href="#'+k+'" class="'+(route===k?'on':'')+'">'+l+'</a>').join('')+'</nav><small class="version">Fase 2 · '+VERSION+'</small></aside><main><header class="top"><div>'+(route==='home'&&d.settings[0]?.logoData?'<img class="home-logo" src="'+esc(d.settings[0].logoData)+'" alt="'+esc(d.settings[0].name)+'">':'<p class="eyebrow">'+esc(d.settings[0]?.name||'Mi taller')+'</p>')+'<h1>'+esc(title)+'</h1></div>'+action+'</header>'+body+'</main><nav class="bottom" aria-label="Navegación principal">'+nav.map(([r,icon,label])=>'<a href="#'+r+'" class="'+(selected===r?'on':'')+'" '+(selected===r?'aria-current="page"':'')+'><span aria-hidden="true">'+icon+'</span>'+label+'</a>').join('')+'</nav>';
 }
 function orderCard(o,history=false){
   const f=financial(d,o),v=vehicle(o),c=client(o);
@@ -62,11 +76,7 @@ function orderPage(){
   const tabs='<div class="tabs" role="group" aria-label="Detalle de orden">'+[['work','Trabajo'],['profit','Rentabilidad'],['movements','Movimientos']].map(([k,l])=>button(l,'order-tab',k,orderTab===k?'selected':'')).join('')+'</div>';
   let body='';
   if(orderTab==='work'){
-    const parts=d.parts.filter(p=>belongs(p,o.id));
-    body='<section><div class="section-title"><h2>Piezas y trabajos</h2>'+(isActive?button('Agregar pieza','part-new',o.id,'compact'):'')+'</div><div class="list">'+(parts.filter(p=>!p.archived).map(p=>{
-      const assignments=(p.laborAssignments||[]).map(a=>esc(find(d,'employees',a.employeeId)?.name||'Empleado')+' · '+money(a.total)+' · '+({pending:'asignado',generated:'devengado',legacy:'histórico',invalid:'revisar'}[a.ledgerState]||'revisar')+(n(a.quantity)>1&&a.mode==='Por pieza'?'<small class="block">'+esc(a.quantity)+' piezas × '+money(a.rate)+' cada una</small>':'')).join('<br>');
-      return '<article class="card piece-card" data-part-id="'+esc(p.id)+'"><div class="split"><h3>'+esc(p.description)+'</h3>'+badge(p.status)+'</div><p class="muted">'+(assignments||'Sin mano de obra asignada')+'</p>'+(isActive?'<div class="piece-actions">'+(p.status!=='Terminada'?button('Terminar','part-finish',p.id,'compact'):'<span class="piece-complete">✓ Terminada</span>')+button('Asignar empleado','assign',p.id,'quiet')+button('<span aria-hidden="true">•••</span><span class="sr-only">Opciones de '+esc(p.description)+'</span>','part-menu',p.id,'icon')+'</div>':'')+'</article>';
-    }).join('')||empty('Agrega las piezas o trabajos de esta orden.'))+'</div>'+(parts.some(p=>p.archived)?'<details class="removed-parts"><summary>Piezas retiradas ('+parts.filter(p=>p.archived).length+')</summary><p class="help">Se conservan sus referencias y movimientos. Puedes restaurarlas.</p>'+parts.filter(p=>p.archived).map(p=>'<div class="row"><span>'+esc(p.description)+'</span>'+(isActive?button('Restaurar','part-restore',p.id,'compact'):'<small>Retirada</small>')+'</div>').join('')+'</details>':'')+(isActive&&!parts.filter(p=>!p.archived).length?button('Marcar trabajo terminado','work-finish',o.id,'quiet'):'')+'</section><section class="panel"><h2>Datos de la orden</h2>'+row('Cliente',esc(client(o).name))+row('Teléfono',esc(client(o).phone))+row('Vehículo',esc(vehicleText(o)))+row('Placa',esc(vehicle(o).plate||'Sin placa'))+row('Entrada',date(o.entryDate))+row('Entrega prevista',date(o.dueDate))+row('Precio acordado',money(f.revenue))+(o.notes?'<h3>Notas internas</h3><p>'+esc(o.notes)+'</p>':'')+(o.customerNotes?'<h3>Notas para el cliente</h3><p>'+esc(o.customerNotes)+'</p>':'')+'</section>';
+    body=(o.initialReceipt?'<section class="panel"><h2>Comprobante de recepción y abono</h2>'+button('Ver comprobante','reception-view',o.id,'primary')+'</section>':'')+workUI.orderContent(o)+'<section class="panel"><h2>Datos de la orden</h2>'+row('Cliente',esc(client(o).name))+row('Teléfono',esc(client(o).phone))+row('Vehículo',esc(vehicleText(o)))+row('Placa',esc(vehicle(o).plate||'Sin placa'))+row('Entrada',date(o.entryDate))+row('Entrega prevista',date(o.dueDate))+(o.workConditions?'<h3>Condiciones del trabajo</h3><p>'+esc(o.workConditions)+'</p>':'')+(o.receptionNotes?'<h3>Observaciones de recepción</h3><p>'+esc(o.receptionNotes)+'</p>':'')+row('Precio acordado',money(f.revenue))+(o.notes?'<h3>Notas internas</h3><p>'+esc(o.notes)+'</p>':'')+(o.customerNotes?'<h3>Notas para el cliente</h3><p>'+esc(o.customerNotes)+'</p>':'')+'</section>';
   }else if(orderTab==='profit'){
     const costs=d.costs.filter(x=>belongs(x,o.id)),accruals=d.ledgerAccruals.filter(x=>belongs(x,o.id));
     const allocated=d.ledgerPayments.filter(x=>!x.voided).flatMap(p=>(p.allocations||[]).filter(a=>Number(a.orderId)===Number(o.id)).map(a=>({...a,date:p.date,employeeId:p.employeeId})));
@@ -80,10 +90,7 @@ function orderPage(){
 }
 function production(){
   const orders=d.orders.filter(active).filter(o=>!finished(d,o));
-  shell('Producción',searchBar('Buscar vehículo, cliente o placa')+'<div class="cards">'+(orders.map(o=>{
-    const parts=d.parts.filter(p=>belongs(p,o.id)&&!p.archived),complete=parts.filter(p=>p.status==='Terminada').length;
-    return '<article class="card searchable" data-search="'+esc([o.number,vehicleText(o),client(o).name,vehicle(o).plate].join(' ').toLowerCase())+'"><a class="card-link" href="#order/'+o.id+'"><div class="split"><small class="gold">'+esc(o.number)+'</small>'+badge(status(d,o))+'</div><h3>'+esc(vehicleText(o))+'</h3><p class="muted">'+complete+' / '+parts.length+' trabajos terminados</p><progress max="'+Math.max(1,parts.length)+'" value="'+complete+'"></progress></a>'+parts.filter(p=>p.status!=='Terminada').map(p=>'<div class="row"><span>'+esc(p.description)+'<small class="muted block">'+esc(p.status)+'</small></span>'+button('Abrir','part-edit',p.id,'compact')+'</div>').join('')+'</article>';
-  }).join('')||empty('No hay trabajos pendientes en producción.'))+'</div>');
+  shell('Producción',searchBar('Buscar vehículo, cliente o placa')+'<div class="cards">'+(orders.map(o=>'<article class="card searchable" data-search="'+esc([o.number,vehicleText(o),client(o).name,vehicle(o).plate].join(' ').toLowerCase())+'"><a class="card-link" href="#order/'+o.id+'"><div class="split"><small class="gold">'+esc(o.number)+'</small>'+badge(status(d,o))+'</div><h2>'+esc(vehicleText(o))+'</h2></a>'+workUI.productionContent(o)+'</article>').join('')||empty('No hay trabajos pendientes en producción.'))+'</div>');
 }
 function history(){
   const items=d.orders.filter(o=>closed(o));
@@ -103,7 +110,7 @@ function employees(){
 function employeePage(){
   const e=find(d,'employees',id);if(!e)return;
   const s=employeeSummary(d,id),accounts=d.ledgerAccounts.filter(a=>Number(a.employeeId)===Number(id));
-  shell(e.name,'<a class="back" href="#employees">Volver a empleados</a><div class="metrics">'+metric('Piezas terminadas',s.pieces)+metric('Devengado',money(s.generated))+metric('Pagado',money(s.paid))+metric('Por pagar',money(s.balance))+'</div><section><h2>Cuentas</h2><div class="cards">'+(accounts.map(a=>'<article class="card"><div class="split"><h3>Cuenta '+a.number+'</h3>'+badge(a.status)+'</div>'+row('Devengado',money(a.generated))+row('Pendiente',money(a.balance))+(a.status!=='CERRADA'&&n(a.balance)>0?button('Registrar pago','employee-pay',a.id,'primary'):a.status==='PAGADA'?button('Cerrar cuenta pagada','account-close',a.id):'')+'</article>').join('')||empty('La cuenta se crea al terminar el primer trabajo asignado.'))+'</div></section><section class="panel"><h2>Trabajos asignados y terminados</h2>'+(s.assignments.map(a=>row(esc(find(d,'parts',a.partId)?.description||a.work)+' · '+esc(find(d,'orders',a.orderId)?.number)+'<small class="block muted">'+esc({pending:'Pendiente de terminar',generated:'Devengado',legacy:'Histórico sin nueva deuda'}[a.ledgerState]||a.ledgerState)+'</small>',money(a.total))).join('')||empty('Sin trabajos asignados.'))+'</section><section class="panel"><h2>Historial de pagos</h2>'+(d.ledgerPayments.filter(p=>Number(p.employeeId)===Number(e.id)).map(p=>'<div class="movement">'+row(date(p.date)+' · '+esc(p.method||'No registrado')+(p.voided?' · Anulado':''),money(p.amount))+'<p class="muted">'+esc(p.note)+'</p>'+(!p.voided&&find(d,'ledgerAccounts',p.accountId)?.status!=='CERRADA'?'<div class="inline-actions">'+button('Editar','employee-payment-edit',p.id,'quiet')+button('Anular','employee-payment-void',p.id,'quiet danger-text')+'</div>':'')+'</div>').join('')||empty('Terminar el trabajo genera el devengo; el pago se registra aquí por separado.'))+'</section>',button('Editar','employee-edit',e.id));
+  shell(e.name,'<a class="back" href="#employees">Volver a empleados</a><div class="metrics">'+metric('Piezas terminadas',s.pieces)+metric('Devengado',money(s.generated))+metric('Pagado',money(s.paid))+metric('Por pagar',money(s.balance))+'</div><section><h2>Cuentas</h2><div class="cards">'+(accounts.map(a=>'<article class="card"><div class="split"><h3>Cuenta '+a.number+'</h3>'+badge(a.status)+'</div>'+row('Devengado',money(a.generated))+row('Pendiente',money(a.balance))+(a.status!=='CERRADA'&&n(a.balance)>0?button('Registrar pago','employee-pay',a.id,'primary'):a.status==='PAGADA'?button('Cerrar cuenta pagada','account-close',a.id):'')+'</article>').join('')||empty('La cuenta se crea al terminar el primer trabajo asignado.'))+'</div></section><section class="panel"><h2>Trabajos asignados y terminados</h2>'+(s.assignments.map(a=>workUI.employeeAssignment(a)).join('')||empty('Sin trabajos asignados.'))+'</section><section class="panel"><h2>Historial de pagos</h2>'+(d.ledgerPayments.filter(p=>Number(p.employeeId)===Number(e.id)).map(p=>'<div class="movement">'+row(date(p.date)+' · '+esc(p.method||'No registrado')+(p.voided?' · Anulado':''),money(p.amount))+'<p class="muted">'+esc(p.note)+'</p>'+(!p.voided&&find(d,'ledgerAccounts',p.accountId)?.status!=='CERRADA'?'<div class="inline-actions">'+button('Editar','employee-payment-edit',p.id,'quiet')+button('Anular','employee-payment-void',p.id,'quiet danger-text')+'</div>':'')+'</div>').join('')||empty('Terminar el trabajo genera el devengo; el pago se registra aquí por separado.'))+'</section>',button('Editar','employee-edit',e.id));
 }
 function inventory(){
   const low=d.inventory.filter(p=>n(p.quantity)<=n(p.minimum));
@@ -119,13 +126,10 @@ function monthPage(){
 }
 function settings(){
   const s=d.settings[0],issues=audit(d),a=appearance();
-  shell('Configuración','<section class="panel"><h2>Datos del taller</h2><form data-form="settings" class="form">'+field('Nombre del taller','name',s.name,'text','required')+field('Teléfono','phone',s.phone,'tel')+field('WhatsApp','whatsapp',s.whatsapp,'tel')+field('Correo','email',s.email,'email')+field('Dirección','address',s.address)+field('RNC / Cédula','document',s.document)+field('Prefijo de órdenes','prefix',s.prefix)+'<div class="full"><button class="btn">Guardar datos</button></div></form><h3>Logo</h3>'+(s.logoData?'<img class="logo-preview" src="'+esc(s.logoData)+'" alt="Logo del taller">':'')+'<label class="field"><span>Subir logo (PNG, JPG o WEBP · máximo 2 MB)</span><input type="file" id="logo" accept="image/png,image/jpeg,image/webp"></label></section><section class="panel appearance-panel"><p class="eyebrow">Tu identidad</p><h2>Apariencia</h2><p class="muted">Elige los colores y el tema de tu taller.</p><form data-form="appearance" class="form">'+select('Tema','theme',[['dark','Oscuro'],['light','Claro']],a.theme)+field('Color principal','primary',a.primary,'color')+field('Color secundario / acento','accent',a.accent,'color')+'<div class="full"><button class="btn primary">Guardar apariencia</button></div></form></section><section class="panel"><h2>Copias de seguridad</h2><p class="help">Tus datos se guardan en este navegador y esta dirección. Exporta una copia antes de cambiar de dispositivo o borrar datos del navegador.</p><div class="inline-actions">'+button('Exportar todos los datos','export','','primary')+button('Importar copia','import')+'</div><input type="file" id="backup-file" accept=".json,application/json" hidden><h3>Recuperación</h3><p>'+d.snapshots.length+' instantáneas locales conservadas.</p>'+button('Descargar recuperación inicial','recovery','','quiet')+'</section><section class="panel"><h2>Revisión de datos</h2>'+(issues.length?issues.map(x=>'<p class="notice">'+esc(x.message)+' · Registro '+esc(x.id)+'</p>').join(''):'<p>No se detectaron referencias rotas, números repetidos ni excesos de cobro en la revisión automática.</p>')+'</section><section class="panel"><h2>TallerOS '+VERSION+'</h2><p>Dirección actual</p><p class="url">'+esc(location.origin+location.pathname)+'</p>'+button('Instalar en el teléfono','install')+'</section>');
+  shell('Configuración','<section class="panel"><h2>Datos del taller</h2><form data-form="settings" class="form">'+field('Nombre del taller','name',s.name,'text','required')+field('Teléfono','phone',s.phone,'tel')+field('WhatsApp','whatsapp',s.whatsapp,'tel')+field('Correo','email',s.email,'email')+field('Dirección','address',s.address)+field('RNC / Cédula','document',s.document)+field('Prefijo de órdenes','prefix',s.prefix)+'<div class="full"><button class="btn">Guardar datos</button></div></form><h3>Logo</h3>'+(s.logoData?'<img class="logo-preview" src="'+esc(s.logoData)+'" alt="Logo del taller">':'')+'<label class="field"><span>Subir logo (PNG, JPG o WEBP · máximo 2 MB)</span><input type="file" id="logo" accept="image/png,image/jpeg,image/webp"></label></section><section class="panel appearance-panel"><p class="eyebrow">Tu identidad</p><h2>Apariencia</h2><p class="muted">El logo genera una paleta automática. Puedes afinarla manualmente.</p>'+button('Usar colores del logo','palette-auto','','quiet')+'<div class="palette-swatches">'+(s.palette||[]).map(color=>'<span style="background:'+esc(color)+'" title="'+esc(color)+'"></span>').join('')+'</div><form data-form="appearance" class="form">'+select('Tema','theme',[['dark','Oscuro'],['light','Claro']],a.theme)+field('Color principal','primary',a.primary,'color')+field('Color secundario / acento','accent',a.accent,'color')+'<div class="full"><button class="btn primary">Guardar apariencia</button></div></form></section>'+workUI.settingsExtra()+'<section class="panel"><h2>Copias de seguridad</h2><p class="help">Tus datos se guardan en este navegador y esta dirección. Exporta una copia antes de cambiar de dispositivo o borrar datos del navegador.</p><div class="inline-actions">'+button('Exportar todos los datos','export','','primary')+button('Importar copia','import')+'</div><input type="file" id="backup-file" accept=".json,application/json" hidden><h3>Recuperación</h3><p>'+d.snapshots.length+' instantáneas locales conservadas.</p>'+button('Descargar copia previa a 2.3','recovery-work','','quiet')+button('Descargar recuperación inicial','recovery','','quiet')+'</section><section class="panel"><h2>Revisión de datos</h2>'+(issues.length?issues.map(x=>'<p class="notice">'+esc(x.message)+' · Registro '+esc(x.id)+'</p>').join(''):'<p>No se detectaron referencias rotas, números repetidos ni excesos de cobro en la revisión automática.</p>')+'</section><section class="panel"><h2>TallerOS '+VERSION+'</h2><p>Dirección actual</p><p class="url">'+esc(location.origin+location.pathname)+'</p>'+button('Instalar en el teléfono','install')+'</section>');
 }
-function invoiceMarkup(i){
-  return '<article class="receipt"><header class="receipt-header">'+(i.workshop.logoData?'<img src="'+esc(i.workshop.logoData)+'" alt="Logo">':'')+'<div><h1>'+esc(i.workshop.name||'RevivAuto')+'</h1><p>'+esc(i.workshop.address)+'</p><p>'+esc(i.workshop.phone)+'</p></div><div><strong>COMPROBANTE INTERNO</strong><p>'+esc(i.number)+'</p><p>Orden '+esc(i.orderNumber)+'</p><p>'+date(i.issuedAt)+'</p></div></header><hr><h2>'+esc(i.client.name)+'</h2><p>'+esc(i.client.phone)+'</p><p>'+esc([i.vehicle.brand,i.vehicle.model,i.vehicle.year].filter(Boolean).join(' '))+' · '+esc(i.vehicle.plate||'Sin placa')+'</p><h2>Trabajos realizados</h2><ul>'+i.works.map(w=>'<li>'+esc(w.description)+'</li>').join('')+'</ul>'+row('Precio total',money(i.total))+'<h2>Abonos y pago final</h2>'+i.payments.map(p=>row((p.final?'Pago final':'Abono')+' · '+date(p.date)+' · '+esc(p.method),money(p.amount))).join('')+'<div class="receipt-total">'+row('Total pagado',money(i.paid))+row('Balance',money(i.balance))+'</div>'+row('Fecha de entrada',date(i.entryDate))+row('Fecha de entrega',date(i.closedAt))+(i.notes?'<p>'+esc(i.notes)+'</p>':'')+(i.supersededAt?'<p>Esta orden fue reabierta después de emitir este comprobante.</p>':'')+'<footer>Comprobante interno de servicio y pago · No es un comprobante fiscal.</footer></article>';
-}
-function showInvoice(i){if(!i)return toast('La orden histórica no tenía comprobante. Reabrir y cerrar requiere revisar sus datos.');formContext={invoice:i};openDialog('Comprobante del cliente',invoiceMarkup(i)+'<div class="dialog-actions">'+button('Compartir','invoice-share',i.id,'primary')+button('Imprimir / PDF','invoice-print',i.id)+button('Descargar','invoice-download',i.id)+'</div>',null,{},false);}
 function openDialog(title,body,type=null,context={},submit='Guardar'){
+  dialog.classList.remove('document-dialog');
   previousFocus=document.activeElement;formContext={...context,invoice:context.invoice||formContext.invoice};
   dialog.innerHTML='<div class="dialog-top"><h2>'+esc(title)+'</h2>'+button('×','dialog-close','','icon')+'</div>'+(type?'<form class="form" data-form="'+type+'">'+body+'<p class="form-error full" role="alert"></p><div class="dialog-actions full">'+button('Cancelar','dialog-close')+'<button class="btn primary">'+submit+'</button></div></form>':body);
   if(!dialog.open)dialog.showModal();
@@ -140,11 +144,7 @@ function paymentForm(orderId,paymentId){
 function orderForm(orderId){
   const o=orderId?find(d,'orders',orderId):{};
   const cs=d.clients.filter(c=>!c.archived||c.id===o.clientId),cId=o.clientId||cs[0]?.id;
-  openDialog(orderId?'Editar '+o.number:'Nueva orden',select('Cliente','clientId',cs.map(c=>[c.id,c.name]),cId,'required')+select('Vehículo','vehicleId',[['','Seleccionar'],...d.vehicles.filter(v=>v.clientId===Number(cId)&&(!v.archived||v.id===o.vehicleId)).map(v=>[v.id,[v.brand,v.model,v.plate].filter(Boolean).join(' · ')])],o.vehicleId,'required')+'<div class="inline-actions full">'+button('Nuevo cliente','client-new','','quiet')+button('Agregar vehículo','vehicle-from-order','','quiet')+'</div>'+field('Precio acordado','total',o.total||0,'number','required')+field('Fecha de entrada','entryDate',o.entryDate||today(),'date','required')+field('Entrega prevista','dueDate',o.dueDate,'date')+textarea('Notas internas (no salen en factura)','notes',o.notes)+textarea('Notas para el cliente','customerNotes',o.customerNotes),'order',{id:orderId},'Guardar orden');
-}
-function partForm(partId,orderId){
-  const p=partId?find(d,'parts',partId):{};
-  openDialog(partId?'Editar pieza/trabajo':'Agregar pieza',field('Descripción','description',p.description,'text','required')+select('Proceso','status',STAGES,p.status||'Pendiente')+select('Responsable de producción','employeeId',[['','Sin asignar'],...d.employees.filter(e=>e.active!==false||e.id===p.employeeId).map(e=>[e.id,e.name])],p.employeeId)+'<details class="full"><summary>Datos adicionales</summary>'+field('Precio de referencia de la pieza','price',p.price||0,'number')+'</details>'+'<p class="help full">El responsable de producción no genera un pago por sí solo. Usa “Asignar empleado” para registrar la mano de obra.</p>','part',{id:partId,orderId:p.orderId||orderId},'Guardar pieza');
+  openDialog(orderId?'Editar '+o.number:'Nueva orden',select('Cliente','clientId',cs.map(c=>[c.id,c.name]),cId,'required')+select('Vehículo','vehicleId',[['','Seleccionar'],...d.vehicles.filter(v=>v.clientId===Number(cId)&&(!v.archived||v.id===o.vehicleId)).map(v=>[v.id,[v.brand,v.model,v.plate].filter(Boolean).join(' · ')])],o.vehicleId,'required')+'<div class="inline-actions full">'+button('Nuevo cliente','client-new','','quiet')+button('Agregar vehículo','vehicle-from-order','','quiet')+'</div>'+field('Precio acordado','total',o.total||0,'number','required')+field('Fecha de entrada','entryDate',o.entryDate||today(),'date','required')+field('Entrega prevista','dueDate',o.dueDate,'date',orderId?'':'required')+(!orderId?documentUI.creationFields():'')+textarea('Condiciones del trabajo','workConditions',o.workConditions)+textarea('Observaciones de recepción','receptionNotes',o.receptionNotes)+textarea('Notas internas (no salen en factura)','notes',o.notes)+textarea('Notas para el cliente','customerNotes',o.customerNotes),'order',{id:orderId,creationToken:orderId?null:crypto.randomUUID()},'Guardar orden');
 }
 function costForm(orderId,costId){
   const c=costId?find(d,'costs',costId):{};
@@ -180,10 +180,13 @@ async function render(){
   else if(route==='finance')shell('Finanzas','<p class="help">Precio acordado, dinero cobrado y costos se consultan en una única vista de rentabilidad dentro de cada orden.</p><div class="cards">'+d.orders.filter(o=>!trashed(o)).map(o=>orderCard(o,closed(o))).join('')+'</div>');
   else if(route==='trash')shell('Papelera','<div class="cards">'+(d.orders.filter(trashed).map(o=>'<article class="card"><h3>'+esc(o.number)+'</h3><p>'+esc(vehicleText(o))+'</p>'+button('Ver detalle conservado','open-order',o.id)+button('Restaurar','order-restore',o.id)+'</article>').join('')||empty('No hay órdenes en papelera.'))+'</div>');
   else shell('Más','<div class="more-grid">'+['history','employees','inventory','monthly','finance','settings','trash'].map(r=>'<a class="card card-link" href="#'+r+'"><h2>'+names[r]+'</h2></a>').join('')+'</div>');
+  if(pendingReception&&route==='order'&&String(pendingReception.orderId)===String(id)){documentUI.show(pendingReception);pendingReception=null;}
 }
 function download(name,content,type='application/json'){const url=URL.createObjectURL(new Blob([content],{type})),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),5000);}
-function invoiceDocument(i){return '<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>'+esc(i.number)+'</title><style>body{font:16px/1.5 system-ui;color:#111;background:white;max-width:780px;margin:30px auto;padding:20px}h1{font-size:26px}h2{font-size:18px}img{max-width:110px;max-height:80px}.receipt-header{display:flex;gap:24px;flex-wrap:wrap;justify-content:space-between}.row{display:flex;justify-content:space-between;gap:20px;padding:10px 0;border-bottom:1px solid #ddd}.receipt-total{font-size:19px;margin-top:15px}footer{font-size:12px;margin-top:32px;color:#555}@media print{body{margin:0;padding:12mm}.receipt-header{break-inside:avoid}.row{break-inside:avoid}}@page{size:auto;margin:12mm}</style>'+invoiceMarkup(i)+'</html>';}
 async function handleAction(action,target){
+  if(action==='palette-auto'){await ensureLogo(true);await render();toast('Paleta del logo aplicada.');return;}
+  if(await documentUI.handleAction(action,target))return;
+  if(await workUI.handleAction(action,target))return;
   if(action==='dialog-close'){dialog.close();return;}
   if(action==='order-new'){orderForm();return;}
   if(action==='order-edit'){orderForm(target);return;}
@@ -197,47 +200,12 @@ async function handleAction(action,target){
   if(action==='vehicle-new'||action==='vehicle-edit'){vehicleForm(action==='vehicle-edit'?target:null,action==='vehicle-new'?target:null);return;}
   if(action==='vehicle-from-order'){const c=dialog.querySelector('[name="clientId"]')?.value;vehicleForm(null,c);return;}
   if(action==='employee-new'||action==='employee-edit'){employeeForm(action==='employee-edit'?target:null);return;}
-  if(action==='part-new'||action==='part-edit'){partForm(action==='part-edit'?target:null,action==='part-new'?target:null);return;}
-  if(action==='part-menu'){
-    const p=find(d,'parts',target);
-    openDialog(p.description,'<div class="menu-list">'+button('Editar pieza/trabajo','part-edit',p.id)+(p.status==='Terminada'?button('Reabrir pieza','part-reopen',p.id):'')+button('Eliminar pieza/trabajo','part-remove',p.id,'quiet danger-text')+'</div>');return;
-  }
-  if(action==='part-remove'){
-    const p=find(d,'parts',target),related=(p.laborAssignments||[]).length||n(p.laborCost)||n(p.materialCost)||n(p.otherCost)||d.ledgerAccruals.some(a=>Number(a.partId)===Number(p.id))||d.costs.some(c=>Number(c.partId)===Number(p.id));
-    confirmAction('¿Eliminar esta pieza/trabajo de la orden?','<p>'+esc(p.description)+'</p>'+(related?'<p class="notice">Esta pieza tiene asignaciones o costos relacionados. Se retirará de producción, pero sus asignaciones, costos, devengos y pagos se conservan. Esta acción no anula importes ni modifica el saldo del empleado.</p>':'<p>Se retirará de los trabajos de la orden.</p>')+'<p class="help">Podrás recuperarla desde “Piezas retiradas”.</p>','part-remove-confirm',target,'Eliminar');return;
-  }
-  if(action==='part-reopen-confirm'){
-    const p=find(d,'parts',target);
-    await service.savePart({...p,status:'Preparación'},p.id);dialog.close();await render();toast('Pieza reabierta. Devengos y pagos conservados.');return;
-  }
   if(action==='pay'){paymentForm(target);return;}
   if(action==='payment-edit'){const p=find(d,'payments',target);paymentForm(p.orderId,p.id);return;}
   if(action==='cost-new'||action==='cost-edit'){const c=action==='cost-edit'?find(d,'costs',target):null;costForm(c?.orderId||target,c?.id);return;}
-  if(action==='assign'){
-    const p=find(d,'parts',target),employees=d.employees.filter(e=>e.active!==false);
-    openDialog('Asignar empleado · '+p.description,select('Empleado','employeeId',employees.map(e=>[e.id,e.name]),employees[0]?.id,'required')+select('Forma de pago','mode',['Por pieza','Monto fijo'],'Por pieza')+field('Cantidad de piezas','quantity',1,'number','required')+field('Tarifa por pieza / monto','rate',employees[0]?.pieceRate||0,'number','required')+field('Trabajo','work',p.description),'assign',{partId:p.id},'Guardar asignación');return;
-  }
   if(action==='employee-pay'||action==='employee-payment-edit'){
     const p=action==='employee-payment-edit'?find(d,'ledgerPayments',target):{},a=find(d,'ledgerAccounts',p.accountId||target);
     openDialog('Pago al empleado','<p class="full help">Saldo: '+money(a.balance)+'</p>'+field('Monto','amount',p.amount||a.balance,'number','required')+select('Método','method',METHODS,p.method||'Efectivo')+field('Fecha','date',p.date||today(),'date','required')+textarea('Nota','note',p.note),'employee-payment',{accountId:a.id,id:p.id},'Guardar pago');return;
-  }
-  if(action==='close-order'){
-    const o=find(d,'orders',target);
-    confirmAction('Finalizar y entregar','<div class="summary">'+row('Cliente',esc(client(o).name))+row('Vehículo',esc(vehicleText(o)))+row('Orden',esc(o.number))+row('Precio total',money(o.total))+row('Total pagado',money(paid(d,o.id)))+row('Balance',money(balance(d,o)))+row('Entrada',date(o.entryDate))+row('Entrega',today())+'<h3>Trabajos realizados</h3><ul>'+d.parts.filter(p=>belongs(p,o.id)&&!p.archived).map(p=>'<li>'+esc(p.description)+'</li>').join('')+'</ul></div>','close-order-confirm',o.id,'Finalizar orden');return;
-  }
-  if(action==='close-order-confirm'){const invoice=await service.closeOrder(target);await render();showInvoice(invoice);toast('Orden entregada y enviada al Historial.');return;}
-  if(action==='invoice'){const o=find(d,'orders',target);showInvoice(find(d,'invoices',o.invoiceId));return;}
-  if(action==='invoice-id'){showInvoice(find(d,'invoices',target));return;}
-  if(action==='invoice-download'){const i=find(d,'invoices',target);download(i.number+'.html',invoiceDocument(i),'text/html');return;}
-  if(action==='invoice-print'){
-    const i=find(d,'invoices',target),iframe=document.createElement('iframe');iframe.className='print-frame';iframe.title='Impresión de comprobante';
-    iframe.srcdoc=invoiceDocument(i);document.body.appendChild(iframe);iframe.onload=()=>{iframe.contentWindow.focus();iframe.contentWindow.print();};setTimeout(()=>iframe.remove(),120000);return;
-  }
-  if(action==='invoice-share'){
-    const i=find(d,'invoices',target),file=new File([invoiceDocument(i)],i.number+'.html',{type:'text/html'});
-    if(navigator.canShare?.({files:[file]})){await navigator.share({title:i.number,files:[file]});}
-    else if(navigator.share){await navigator.share({title:i.number,text:i.workshop.name+' · '+i.number+'\n'+i.client.name+'\n'+i.works.map(w=>w.description).join('\n')+'\nTotal pagado: '+money(i.paid)+'\nBalance: '+money(i.balance)});}
-    else {download(i.number+'.html',invoiceDocument(i),'text/html');toast('Comprobante descargado para adjuntarlo y compartirlo.');}return;
   }
   if(action==='product-new'||action==='product-edit'){productForm(action==='product-edit'?target:null);return;}
   if(action.startsWith('inventory-')){
@@ -270,6 +238,7 @@ async function handleAction(action,target){
     'vehicle-archive':()=>service.archive('vehicles',target),'vehicle-restore':()=>service.archive('vehicles',target,true)
   };
   if(mutations[action]){await mutations[action]();dialog.close();await render();toast('Cambios guardados.');return;}
+  if(action==='recovery-work'){download('TallerOS-antes-modelo-piezas-'+today()+'.json',JSON.stringify(await service.storage.previousModelBackup(),null,2));return;}
   if(action==='export'){download('TallerOS-copia-'+today()+'.json',JSON.stringify(await service.storage.export(),null,2));toast('Copia completa descargada.');return;}
   if(action==='recovery'){const s=d.snapshots.find(s=>s.id==='before-phase2');if(s)download('TallerOS-recuperacion-antes-fase2.json',JSON.stringify({format:'TallerOS-backup',version:1,workshopId:1,main:s.payload.main,ledger:{accounts:s.payload.ledger.accounts||[],accruals:s.payload.ledger.accruals||[],payments:s.payload.ledger.payments||[]}},null,2));return;}
   if(action==='import'){document.querySelector('#backup-file').click();return;}
@@ -278,6 +247,7 @@ async function handleAction(action,target){
 }
 document.addEventListener('click',async event=>{
   const control=event.target.closest('[data-action]');if(!control||busy)return;
+  if(control.dataset.action==='reception-remove'){control.closest('.reception-piece').remove();return;}
   busy=true;control.disabled=true;
   try{await handleAction(control.dataset.action,control.dataset.id);}catch(error){if(error.name!=='AbortError')toast(error.message);}
   finally{busy=false;if(control.isConnected)control.disabled=false;}
@@ -288,32 +258,42 @@ document.addEventListener('submit',async event=>{
   const v=Object.fromEntries(new FormData(form)),c=formContext;
   try{
     let saved,destination;
-    switch(form.dataset.form){
+    if(await documentUI.submit(form,c))return;
+    const workHandled=await workUI.submit(form,c);
+    if(workHandled==='keep-dialog')return;
+    if(!workHandled)switch(form.dataset.form){
       case 'client':saved=await service.saveClient(v,c.id);destination='client/'+saved.id;break;
       case 'vehicle':saved=await service.saveVehicle(v,c.id);destination='client/'+saved.clientId;break;
       case 'employee':saved=await service.saveEmployee(v,c.id);destination='employee/'+saved.id;break;
-      case 'order':saved=await service.saveOrder(v,c.id);destination='order/'+saved.id;orderTab='work';break;
-      case 'part':saved=await service.savePart({...v,orderId:c.orderId},c.id);destination='order/'+saved.orderId;break;
-      case 'assign':await service.assign(c.partId,v);break;
+      case 'order':saved=await service.saveOrder({...v,...(!c.id?documentUI.creationValues(form):{}),creationToken:c.creationToken},c.id);destination='order/'+saved.id;orderTab='work';if(!c.id)pendingReception=saved.initialReceipt;break;
       case 'payment':await service.payment(c.orderId,v,c.id);destination='order/'+c.orderId;break;
       case 'cost':await service.cost(c.orderId,v,c.id);orderTab='profit';destination='order/'+c.orderId;break;
       case 'employee-payment':await service.employeePayment(c.accountId,v,c.id);break;
       case 'product':saved=await service.saveProduct(v,c.id);destination='product/'+saved.id;break;
       case 'inventory-move':await service.inventoryMove(c.id,{...v,kind:c.kind});break;
       case 'settings':await service.settings(v);break;
-      case 'appearance':await service.settings({appearance:v});break;
+      case 'appearance':await service.settings({appearance:{...v,mode:'manual'}});break;
     }
-    dialog.close();await render();if(destination)navigate(destination);toast('Guardado correctamente.');
+    dialog.close();await render();if(destination)navigate(destination);
+    const messages={order:c.id?'Orden actualizada correctamente.':'Orden creada correctamente. Comprobante inicial generado.',payment:c.id?'Pago actualizado.':'Pago registrado.',cost:'Costo registrado.',client:c.id?'Cliente actualizado.':'Cliente creado correctamente.',vehicle:c.id?'Vehículo actualizado.':'Vehículo creado correctamente.','employee-payment':'Pago al empleado registrado.'};
+    toast(messages[form.dataset.form]||'Guardado correctamente.');
   }catch(error){const errorEl=form.querySelector('.form-error');if(errorEl)errorEl.textContent=error.message;else toast(error.message);}
   finally{busy=false;if(submit?.isConnected)submit.disabled=false;}
 });
-document.addEventListener('input',event=>{if(event.target.matches('[data-filter]'))filterCards();});
+document.addEventListener('input',event=>{
+  if(event.target.matches('[data-filter]'))filterCards();
+  if(event.target.matches('[data-piece-search]')){
+    const term=event.target.value.toLocaleLowerCase();event.target.closest('form').querySelectorAll('.piece-choice').forEach(el=>el.hidden=!el.textContent.toLocaleLowerCase().includes(term));
+  }
+  if(event.target.closest('[data-form="work-assignment"],[data-form="order-pieces"]'))workUI.updatePicker();
+});
 document.addEventListener('change',async event=>{
   const target=event.target;
   try{
     if(target.name==='period'){selectedMonth=target.value||today().slice(0,7);monthPage();}
     if(target.name==='clientId'&&target.closest('[data-form="order"]')){const s=dialog.querySelector('[name="vehicleId"]');s.innerHTML='<option value="">Seleccionar</option>'+d.vehicles.filter(v=>v.clientId===Number(target.value)&&!v.archived).map(v=>'<option value="'+v.id+'">'+esc(v.brand+' '+v.model+' '+(v.plate||''))+'</option>').join('');}
-    if(target.name==='employeeId'&&target.closest('[data-form="assign"]'))dialog.querySelector('[name="rate"]').value=find(d,'employees',target.value)?.pieceRate||0;
+    if(target.name==='employeeId'&&target.closest('[data-form="work-assignment"]')&&!formContext.locked)dialog.querySelector('[name="rate"]').value=find(d,'employees',target.value)?.pieceRate||0;
+    if(target.closest('[data-form="work-assignment"],[data-form="order-pieces"]'))workUI.updatePicker();
     if(target.id==='backup-file'){
       const file=target.files[0];if(!file)return;if(file.size>100*1024*1024)throw Error('La copia supera 100 MB.');
       pendingImport=JSON.parse(await file.text());service.storage.validate(pendingImport);
@@ -322,7 +302,7 @@ document.addEventListener('change',async event=>{
     if(target.id==='logo'){
       const file=target.files[0];if(!file)return;if(!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>2*1024*1024)throw Error('Selecciona PNG, JPG o WEBP de hasta 2 MB.');
       const data=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=reject;r.readAsDataURL(file);});
-      await service.settings({logoData:data});await render();toast('Logo guardado.');
+      await service.settings({logoData:data});await ensureLogo(true);await render();toast('Logo guardado.');
     }
   }catch(e){toast(e.message);}
 });
@@ -330,4 +310,4 @@ dialog.addEventListener('close',()=>previousFocus?.isConnected&&previousFocus.fo
 window.addEventListener('hashchange',()=>{dialog.close();window.scrollTo(0,0);render().catch(e=>toast(e.message));});
 window.addEventListener('talleros-blocked',()=>{app.innerHTML='<main><h1>Cierra las otras pestañas de TallerOS</h1><p>La actualización necesita que cierres la versión anterior en este navegador. No borres datos. Esta pantalla continuará cuando se libere el almacenamiento.</p></main>';});
 window.addEventListener('talleros-versionchange',()=>{app.innerHTML='<main><h1>Hay una nueva versión</h1><p>Recarga esta pestaña para seguir trabajando.</p></main>';});
-try{await service.init();await render();}catch(error){app.innerHTML='<main><h1>No se pudo abrir TallerOS</h1><p>'+esc(error.message)+'</p><p>Conserva los datos del navegador y vuelve a intentar. No borres IndexedDB.</p></main>';}
+try{await service.init();await ensureLogo();await render();}catch(error){app.innerHTML='<main><h1>No se pudo abrir TallerOS</h1><p>'+esc(error.message)+'</p><p>Conserva los datos del navegador y vuelve a intentar. No borres IndexedDB.</p></main>';}

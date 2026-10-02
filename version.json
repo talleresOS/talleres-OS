@@ -1,12 +1,13 @@
 {
   "name": "TallerOS",
-  "version": "2.2.0",
+  "version": "2.4.1",
   "phase": 2,
-  "date": "2026-09-30",
-  "baseCommit": "308df9d23b267eebfce156ff277cf92f2a67eb7c",
+  "date": "2026-10-02",
+  "baseCommit": "383c790",
   "canonicalUrl": "https://talleresos.github.io/talleres-OS/index.html",
   "database": {
     "name": "talleros2",
-    "version": 2
-  }
+    "version": 3
+  },
+  "build": "2.4.1-audit-20261002"
 }
