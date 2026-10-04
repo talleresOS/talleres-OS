@@ -1,73 +1,69 @@
-# TallerOS — RevivAuto
+# TallerOS
 
-Aplicación existente, actualizada a Fase 2. Identidad oscura/dorada y operación desde teléfono.
+Aplicación existente de gestión de taller, ampliada sobre 2.2.0 sin reconstruirla.
 
-URL estable: https://talleresos.github.io/talleres-OS/index.html
-Repositorio: https://github.com/talleresOS/talleres-OS
-Versión del código: 2.2.0.
+- Código local: **2.5.0 piloto** sobre 2.4.1. Pintura completa 13 piezas, asistente con acciones controladas e interfaz renovada.
+- Publicada: **2.4.1**, intacta. Vercel preparado; conexión/despliegue y OpenAI real pendientes.
+- Informe actual: `docs/ASISTENTE-2.5.0.md`.
+- URL existente: https://talleresos.github.io/talleres-OS/index.html
+- Repositorio: https://github.com/talleresOS/talleres-OS
+- Auditoría final y autorización de publicación: `docs/AUDITORIA-2.4.1.md`.
+- Informes: `docs/COMPROBANTES-2.4.0.md` y `docs/FASE2-2.3.0.md`. Punto de continuación: `CONTINUIDAD.md`.
 
-## Datos
+## Datos y migración
 
-La URL publica el programa, no una base compartida. Cada navegador/dispositivo conserva sus datos en IndexedDB. Mantener la misma dirección permite actualizar la aplicación sin cambiar el origen de esos datos. No existe sincronización entre teléfonos.
+Cada navegador conserva sus datos en IndexedDB; GitHub publica el programa, no los datos del taller. No existe sincronización cloud.
 
-Antes de actualizar, en la instalación actual: Configuración → Exportar todos los datos. Guarda ese JSON fuera del navegador.
+La base `talleros2` pasa del esquema 2 al 3 mediante ampliación aditiva. Se incorporan `vehiclePieces`, `workAssignments` y `quotations`. Antes de transformar el modelo se guarda la instantánea `before-work-model-v3`. Configuración permite descargar esa copia previa a 2.3; exportar todos los datos genera un backup completo formato 3. La importación admite formatos anteriores con validación y recuperación previa.
 
-Al abrir Fase 2 por primera vez:
-1. Se añaden stores a talleros2 sin borrar los existentes.
-2. Se crea la instantánea before-phase2 con los registros originales.
-3. Se copian las cuentas, devengos y pagos del libro auxiliar a la base principal.
-4. Se agregan metadatos operativos preservando IDs, REV, estados antiguos, costos y campos desconocidos.
-5. Todo se confirma en una sola transacción. Una ejecución posterior no repite la migración.
+Se conservan IDs, números REV, clientes, vehículos, órdenes, piezas antiguas, costos, cuentas, devengos, pagos, movimientos, documentos y campos desconocidos. La migración es transaccional e idempotente. No borra la base ni el libro auxiliar histórico `talleros2-ledger`.
 
-El libro auxiliar original queda intacto. Las operaciones nuevas se guardan juntas en la base principal. Los backups v2 incluyen todos los módulos nuevos; las copias v1 pueden importarse en instalaciones que no contienen módulos nuevos, con recuperación previa.
+Una asignación antigua que solo decía cantidad 5 aparece como **5 piezas sin especificar**. No se inventan nombres ni procesos históricos. El propietario puede identificar las piezas manteniendo los importes protegidos. Las asignaciones históricas o ya devengadas no permiten cambiar silenciosamente empleado, cantidad, tarifa o total.
 
-Una orden histórica entregada sin fecha queda en Historial como “Fecha no registrada”. No se inventa fecha ni un pago. Si tiene saldo previo, se señala en la revisión de datos.
+No abrir directamente una versión de código que solicite un esquema inferior después de migrar. Un ZIP del código no es una copia de los datos del navegador; la recuperación de datos debe usar backups y código compatible, nunca borrar IndexedDB.
 
-## Apariencia y piezas (2.2.0)
+## Piezas, procesos y empleados
 
-Configuración → Apariencia permite elegir tema claro/oscuro y colores principal/acento. Se guardan en settings.appearance de la base existente; no hay cambio de esquema ni migración adicional. El logo y la tarifa histórica del pintor permanecen almacenados; esta última ya no aparece en datos generales.
+1. En la orden se eligen las piezas físicas: catálogo táctil, búsqueda, carro completo o pieza personalizada.
+2. Cada trabajo elige proceso, empleado y su propia selección de piezas.
+3. Por pieza: cantidad seleccionada × tarifa. Monto fijo: el importe acordado sin multiplicarlo.
+4. Cada trabajo tiene estado Pendiente, En proceso o Terminado. Terminar un proceso no termina los demás.
+5. Terminar devenga; pagar al empleado es una operación independiente. Reabrir, retirar y restaurar no repite devengos ni pagos.
 
-Cada pieza conserva Terminar y Asignar empleado. El menú ••• reúne Editar, Reabrir y Eliminar. Eliminar es reversible: usa el archivo existente y agrupa la pieza en Piezas retiradas; deja de aparecer en producción. Si tiene asignaciones o costos, la confirmación avisa que se conservan todos sus importes y pagos. No es una anulación contable. La edición conserva el precio de referencia en Datos adicionales.
+Pintura completa siempre representa las 13 piezas estándar y se puede elegir con un toque.
 
-Reabrir devuelve la pieza a Preparación mediante la edición existente. No revierte pagos ni devengos; terminar nuevamente reutiliza el devengo original sin duplicarlo.
+Carro completo utiliza una lista configurable en Ajustes, inicialmente de 13 piezas. Quitar una usa 12; cambiar la configuración cambia la selección inicial, no las órdenes existentes.
 
-## Operación
+Una pieza retirada deja de estar activa. Para retirar una pieza vinculada, primero hay que quitarla de sus trabajos editables o retirar esos trabajos. Se preservan la trazabilidad y los importes devengados. Producción y Empleados reutilizan los mismos trabajos, sin un responsable duplicado.
 
-- Terminar piezas devenga mano de obra; no paga al empleado ni entrega el vehículo.
-- Trabajo terminado con deuda: Cobrar saldo.
-- Saldo cero: Finalizar y entregar → revisar resumen → Finalizar orden.
-- El cierre crea un comprobante interno y bloquea cambios. Reabrir requiere confirmación y conserva los comprobantes previos.
-- El PDF utiliza Imprimir / PDF del navegador. Descargar crea un HTML autocontenido para guardar y compartir. Web Share se utiliza cuando está disponible.
-- El comprobante usa una lista explícita de datos permitidos del cliente; excluye notas internas y todos los costos.
-- Inventario registra entradas, salidas y ajustes. Aún no convierte automáticamente consumos en costos.
+## Cotización, garantía y entrega
 
-## Finanzas y fechas
+La cotización toma una copia de cliente, vehículo, logo, piezas, procesos, precio, condiciones y garantía. Confirmar el precio registra el acuerdo; las revisiones conservan historial. Un cambio de precio posterior exige volver a confirmar el acuerdo antes de entregar.
 
-Rentabilidad = precio acordado − materiales − mano de obra − otros costos. Los pagos a empleados no se descuentan de nuevo.
+La garantía es configurable: ninguna, 3, 6, 12 meses o personalizada. Si no se configura, no se inventa. Cambiar la garantía general no cambia cotizaciones ni acuerdos anteriores.
 
-Cierre mensual: venta por fecha de entrada/acuerdo; cobros por su fecha; costos por fecha conocida de costo o devengo; cuentas por cobrar al último día. Los movimientos de caja y costos no desaparecen al cancelar o archivar órdenes. Los costos históricos sin fecha se conservan y se muestran como advertencia de información incompleta.
+Documentos del cliente excluyen salarios, costos, rentabilidad y notas internas. Pueden visualizarse, imprimirse/guardarse como PDF con el navegador, descargarse como HTML autocontenido y compartirse cuando Web Share está disponible. WhatsApp prepara el mensaje y permite descargar el documento: no afirma haber adjuntado un archivo automáticamente.
 
-Cerrar mes solo está permitido para períodos terminados y guarda una instantánea inmutable con su base de datos. No vuelve a calcularse silenciosamente.
+Trabajos terminados → cobrar saldo → revisar entrega → confirmar. Saldo cero por sí solo no entrega el vehículo. La constancia conserva garantía y fecha real de entrega, e incluye nombre, firma física y fecha. La orden pasa a Historial y queda bloqueada, con reapertura controlada.
 
-## Desarrollo y publicación
+## Apariencia y operación conservada
 
-Archivos:
-- domain.mjs: estados derivados, cálculos, comprobantes y revisión.
-- storage.mjs: IndexedDB, migración, importación y exportación.
-- service.mjs: operaciones transaccionales.
-- app.js / styles.css: interfaz única, sin MutationObserver ni formularios superpuestos.
-- pwa.js / sw.js: instalación, caché por versión y actualización al cerrar pestañas antiguas.
+Logo en Inicio y documentos; paleta automática de hasta cinco colores útiles, con alternativa predeterminada y controles manuales avanzados. Temas claro/oscuro persistentes, contraste y profundidad sutil. Se mantiene “Tu taller, hoy”.
 
-Ejecuta node prepare-release.mjs para generar dist. Los archivos del manifiesto de publicación deben reemplazar los públicos del repositorio GitHub; incluir .mjs con MIME de JavaScript.
+Inventario, clientes, vehículos, cobros, cuentas de empleados, materiales, otros costos, rentabilidad y cierre mensual siguen en la aplicación existente. Venta, caja cobrada y saldo pendiente permanecen separados. Los cierres mensuales guardan instantáneas históricas; pagar mano de obra no vuelve a restar su costo.
 
-El service worker espera que se cierren las pestañas anteriores para activar la nueva versión. Después de publicar: abrir la URL en línea, cerrar las pestañas/icono de TallerOS y volver a abrir. Si hay otra pestaña bloqueando la migración, la app indica que se cierre; no solicita borrar datos.
+## Desarrollo
 
-No volver directamente al código MVP v1 después de migrar: el esquema conserva todos los datos, pero ese código pide explícitamente IndexedDB versión 1. La recuperación debe hacerse con una versión compatible y un backup, nunca borrando la base.
+- `domain.mjs`: cálculos, estados y datos permitidos en documentos.
+- `storage.mjs`: IndexedDB, migraciones y copias.
+- `service.mjs` y `work-service.mjs`: operaciones transaccionales.
+- `work-model.mjs`: catálogo, relaciones y compatibilidad histórica.
+- `app.js`, `work-ui.mjs`, `styles.css`: interfaz existente y flujos nuevos.
+- `logo-palette.mjs`: análisis local del logo.
+- `pwa.js`, `sw.js`: instalación y caché versionada; la actualización espera el cierre de las pestañas antiguas.
 
-## Verificación
+`npm run build` prepara 19 archivos públicos en `dist`, con hashes. No publica. No editar `dist` directamente.
 
-tests/phase2.mjs recorre los diez casos solicitados en un navegador Chromium/Edge aislado, con datos sintéticos basados en el esquema real. Prueba migración v1, importación, concurrencia, facturas sin costos, persistencia al reiniciar navegador y anchos 360/390/430/1280.
+`npm test` ejecuta modelo, interfaz, migración desde el código exacto del tag `v2.2.0`, regresiones y casos extremos. Requiere Playwright y Edge/Chromium. Variables opcionales: `TALLEROS_PLAYWRIGHT`, `TALLEROS_BROWSER`, `TALLEROS_TEST_OUTPUT` (usar `.test-results` dentro del proyecto). La prueba adicional de actualización desde el MVP usa la opción documentada en `tests/edge-cases.mjs`.
 
-No afirma haber leído los datos privados del teléfono de RevivAuto. Los datos reales no están dentro de GitHub.
-
-Pruebas de esta actualización: node tests/ui-refresh.mjs y node tests/ui-upgrade.mjs. La segunda necesita el tag v2.1.0 del repositorio para simular la actualización desde la versión anterior. Incluyen cantidad × tarifa, edición, reapertura, retiro/restauración, temas, logo, cierre del navegador y actualización PWA offline. Los tamaños móviles se prueban en Edge/Chromium; no sustituyen una revisión en un iPhone físico.
+Las pruebas usan datos sintéticos, perfiles aislados y tamaños 360/390/430/1280. No equivalen a haber inspeccionado la base privada del teléfono ni a una prueba en Safari/iPhone físico. Ver resultados y límites en el informe.

@@ -36,10 +36,10 @@ try{
   await page.waitForURL('**#client/*');
   await act('Agregar vehículo').click();await field('Marca').fill('Mazda');await field('Modelo').fill('CX9');await field('Año').fill('2020');await field('Placa').fill('TEST-091');await submit('Guardar vehículo');
   await go('employees');await act('Agregar empleado').click();await field('Nombre').fill('David Prueba');await field('Puesto').fill('Pintor');await field('Tarifa por pieza').fill('500');await submit('Guardar empleado');
-  await go('orders');await act('Nueva orden').click();await field('Vehículo').selectOption({label:'Mazda · CX9 · TEST-091'});await field('Precio acordado').fill('50000');await field('Notas internas (no salen en factura)').fill('PRIVADO: margen y costo interno');await submit('Guardar orden');
-  await page.waitForURL('**#order/*');await act('Agregar pieza').click();await field('Descripción').fill('Pintura completa, 13 piezas');await submit('Guardar pieza');
-  assert.equal(await act('Agregar pieza').count(),1);assert.equal(await act('Rentabilidad').count(),1);
-  await act('Asignar empleado').click();await field('Cantidad de piezas').fill('13');await field('Tarifa por pieza / monto').fill('500');await submit('Guardar asignación');
+  await go('orders');await act('Nueva orden').click();await field('Vehículo').selectOption({label:'Mazda · CX9 · TEST-091'});await field('Precio acordado').fill('50000');await field('Notas internas (no salen en factura)').fill('PRIVADO: margen y costo interno');await field('Entrega prevista').fill('2026-12-31');await act('Guardar orden').click();await page.locator('.customer-document').waitFor();await act('Cerrar').click();
+  await page.waitForURL('**#order/*');await act('Seleccionar piezas').click();await act('Carro completo').click();await submit('Guardar piezas');
+  assert.equal(await act('Seleccionar piezas').count(),1);assert.equal(await act('Rentabilidad').count(),1);
+  await act('Asignar trabajo').click();await field('Proceso').selectOption('Pintura');await field('Empleado').selectOption({label:'David Prueba'});await act('Seleccionar todas').click();await field('Tarifa por pieza / monto').fill('500');await submit('Guardar asignación');
   await act('Terminar').click();await act('Terminar trabajo').click();await page.waitForFunction(()=>!document.querySelector('#dialog').open);
   await act('Cobrar saldo').click();await field('Monto recibido').fill('23000');await submit('Guardar pago');
   assert.equal(await act('Finalizar y entregar').count(),0);assert.match(await page.locator('.status-panel').innerText(),/27[,.]000/);
@@ -51,9 +51,9 @@ try{
   assert.match(await page.locator('.status-panel').innerText(),/Pago completado/);
   await act('Finalizar y entregar').click();assert.match(await page.locator('#dialog').innerText(),/Cliente Prueba RevivAuto/);await act('Finalizar orden').click();await page.locator('.receipt').waitFor();
   const receipt=await page.locator('.receipt').innerText();
-  assert.match(receipt,/REV-C-000001/);assert.doesNotMatch(receipt,/PRIVADO|ganancia|6500|6,500|Material pintura prueba/i);
+  assert.match(receipt,/REV-0001/);assert.doesNotMatch(receipt,/PRIVADO|ganancia|6500|6,500|Material pintura prueba/i);
   await page.screenshot({path:path.join(artifacts,'02-comprobante-390.png'),fullPage:true});
-  const invoiceDownload=page.waitForEvent('download');await act('Descargar').click();const file=await invoiceDownload;assert.match(file.suggestedFilename(),/REV-C-000001\.html/);
+  const invoiceDownload=page.waitForEvent('download');await act('Descargar').click();const file=await invoiceDownload;assert.match(file.suggestedFilename(),/Factura-REV-0001\.html/);
   await act('×').click();
   record('CASO 1 · flujo completo por interfaz','Cliente → vehículo → orden → pieza → empleado → terminar → abonos → entregar → comprobante.');
   const full=await evaluate(async()=>{
@@ -115,7 +115,7 @@ try{
     const counts=Object.fromEntries(MAIN.map(s=>[s,[original[s].length,second[s].length]]));
     const before=financial(first,first.orders[0]),after=financial(second,second.orders[0]);
     const created=await service.saveOrder({clientId:11,vehicleId:12,entryDate:'2026-09-30',total:100});
-    await Promise.all([service.finishPart(31),service.finishPart(31)]);
+    const migratedWork=second.workAssignments.find(w=>w.legacyPartId===31);await Promise.all([service.workState(migratedWork.id,'Terminado'),service.workState(migratedWork.id,'Terminado')]);
     const afterFinish=await service.state();
     const parallelOrders=await Promise.all([service.saveOrder({clientId:11,vehicleId:12,entryDate:'2026-09-30',total:100}),service.saveOrder({clientId:11,vehicleId:12,entryDate:'2026-09-30',total:100})]);
     const payResults=await Promise.allSettled([service.payment(created.id,{amount:60,date:'2026-09-30',method:'Efectivo'}),service.payment(created.id,{amount:60,date:'2026-09-30',method:'Efectivo'})]);
@@ -124,7 +124,7 @@ try{
     await service.storage.import(exported);const restored=await service.state();
     return {counts,unchanged:before.costs===after.costs,unknown:second.clients[0].unknownField,unknownPart:second.parts[0].unknownPart,unknownOrder:second.orders[0].unknownOrder,number:created.number,snapshots:second.snapshots.length,ledgerCopied:second.ledgerPayments.length,accruals:afterFinish.ledgerAccruals.filter(x=>x.partId===31).length,laborCost:afterFinish.parts.find(p=>p.id===31).laborCost,parallelNumbers:parallelOrders.map(o=>o.number),acceptedPayments:payResults.filter(r=>r.status==='fulfilled').length,rejected,countBefore,countAfter:restored.orders.length,legacyStatus:restored.orders.find(o=>o.id===22).status,legacyClosedAt:restored.orders.find(o=>o.id===22).closedAt};
   });
-  assert.ok(Object.values(migration.counts).every(([a,b])=>a===b));assert.equal(migration.unchanged,true);assert.equal(migration.unknown,'conservar');assert.equal(migration.unknownPart,'keep');assert.deepEqual(migration.unknownOrder,{keep:true});assert.equal(migration.number,'REV-0058');assert.equal(migration.snapshots,1);assert.equal(migration.ledgerCopied,1);assert.equal(migration.accruals,1);assert.equal(migration.laborCost,1000);assert.equal(new Set(migration.parallelNumbers).size,2);assert.equal(migration.acceptedPayments,1);assert.equal(migration.rejected,true);assert.equal(migration.countBefore,migration.countAfter);assert.equal(migration.legacyStatus,'Entregada');assert.equal(migration.legacyClosedAt,null);
+  assert.ok(Object.values(migration.counts).every(([a,b])=>a===b));assert.equal(migration.unchanged,true);assert.equal(migration.unknown,'conservar');assert.equal(migration.unknownPart,'keep');assert.deepEqual(migration.unknownOrder,{keep:true});assert.equal(migration.number,'REV-0058');assert.equal(migration.snapshots,4);assert.equal(migration.ledgerCopied,1);assert.equal(migration.accruals,1);assert.equal(migration.laborCost,1000);assert.equal(new Set(migration.parallelNumbers).size,2);assert.equal(migration.acceptedPayments,1);assert.equal(migration.rejected,true);assert.equal(migration.countBefore,migration.countAfter);assert.equal(migration.legacyStatus,'Entregada');assert.equal(migration.legacyClosedAt,null);
   record('CASO 9 · migración y concurrencia','Esquema v1 real de IndexedDB: mismos registros y campos; REV-0058 respeta snapshots; ejecución repetida idempotente; doble terminación/cobro y altas simultáneas protegidas; importación atómica.');
   const period=await legacyPage.evaluate(async()=>{
     const {TallerService}=await import('./service.mjs'),{monthly}=await import('./domain.mjs');const service=new TallerService();const d=await service.init();
@@ -141,7 +141,7 @@ try{
   await persistentPage.evaluate(async()=>{const {TallerService}=await import('./service.mjs');const s=new TallerService();await s.init();await s.saveClient({name:'Persistencia navegador',phone:'123'});});await persistent.close();
   persistent=await playwright.chromium.launchPersistentContext(profile,{...launch,serviceWorkers:'block'});persistentPage=await persistent.newPage();await persistentPage.goto(origin+'/index.html#clients');await persistentPage.getByRole('link',{name:/Persistencia navegador/}).waitFor();await persistent.close();
   record('CASO 8 adicional · cierre completo del navegador','Registro conservado después de terminar y volver a iniciar el proceso del navegador.');
-  assert.equal(errors.length,0,errors.join('\n'));record('CASO 10 · duplicaciones y ejecución','Una acción Agregar pieza y una pestaña Rentabilidad por orden. Cero errores de JavaScript en el flujo probado.');
+  assert.equal(errors.length,0,errors.join('\n'));record('CASO 10 · duplicaciones y ejecución','Una acción Seleccionar piezas y una pestaña Rentabilidad por orden. Cero errores de JavaScript en el flujo probado.');
   await writeFile(path.join(artifacts,'results.json'),JSON.stringify({passed:results.length,results,errors,migration,executedAt:new Date().toISOString()},null,2));
 }catch(error){
   await page.screenshot({path:path.join(artifacts,'failure.png'),fullPage:true}).catch(()=>{});

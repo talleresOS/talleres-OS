@@ -1,0 +1,11 @@
+.git
+.test-results
+local-backups
+node_modules
+**/.env
+**/.env.*
+TallerOS-copia-*.json
+*.local.json
+tests
+docs
+.openai

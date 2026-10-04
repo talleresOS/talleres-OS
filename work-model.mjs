@@ -11,6 +11,50 @@ export const PIECE_CATALOG=[
 ].map(([id,name])=>({id,name}));
 export const catalog=s=>[...PIECE_CATALOG,...(s.customPieces||[])];
 export const fullCar=s=>s.fullCarPieceIds||PIECE_CATALOG.map(p=>p.id);
+export const isFullPaint=name=>String(name||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase()==='pintura completa';
+// Painting the full car always means the existing 13 standard physical pieces.
+// The workshop's optional custom "carro completo" selection remains independent.
+export function expandReceptionPieces(items){
+  if(!Array.isArray(items))return items;
+  const expanded=new Map();
+  for(const item of items){
+    const full=isFullPaint(item.name);
+    for(const name of full?PIECE_CATALOG.map(p=>p.name):[String(item.name||'').trim()]){
+      const key=name.toLocaleLowerCase(),old=expanded.get(key);
+      if(old&&!full&&!old.full)throw Error('Una pieza está repetida. Selecciona sus procesos en una misma fila.');
+      expanded.set(key,{name,processes:[...new Set([...(old?.processes||[]),...(item.processes||[]),...(full?['Pintura']:[])])],full:full||old?.full});
+    }
+  }
+  return [...expanded.values()];
+}
+export function migrateFullPaint(d,at=new Date().toISOString()){
+  if(d.meta.some(x=>x.id==='full-paint-13-v1'))return false;
+  d.snapshots.push({id:'before-full-paint-13-v1',workshopId:1,createdAt:at,reason:'Antes de normalizar pintura completa y habilitar asistente',payload:structuredClone(Object.fromEntries(Object.entries(d).filter(([s])=>s!=='snapshots')))});
+  for(const o of d.orders.filter(o=>o.workshopId===1)){
+    const macros=d.vehiclePieces.filter(p=>p.orderId===o.id&&!p.retired&&isFullPaint(p.name));
+    const jobs=worksFor(d,o.id,true).filter(w=>w.selectedPieceIds.some(id=>macros.some(p=>p.id===id))||!w.selectedPieceIds.length&&w.quantity===1&&isFullPaint(w.legacyDescription));
+    if(!macros.length&&!jobs.length)continue;
+    const protectedOrder=o.archived||o.deleted||o.deletedAt||['closed','cancelled'].includes(o.lifecycle)||['Entregada','Cerrada','Cancelada','Cerrada / Entregada'].includes(o.status);
+    if(protectedOrder||jobs.some(w=>workFrozen(w)||w.cancelled||w.status==='Terminado'||d.ledgerAccruals.some(a=>a.sourceAssignmentId===w.sourceAssignmentId))){
+      o.fullPaintHistoricalNotice='Pintura completa histórica: se conservan cantidad e importes originales; no se recalculan devengos ni pagos.';continue;
+    }
+    const standard=PIECE_CATALOG.map(c=>{
+      let p=d.vehiclePieces.find(p=>p.orderId===o.id&&p.catalogId===c.id);
+      if(!p){p={id:crypto.randomUUID(),workshopId:1,orderId:o.id,catalogId:c.id,name:c.name,retired:false,createdAt:at};d.vehiclePieces.push(p);}
+      p.retired=false;return p.id;
+    });
+    for(const w of jobs){
+      w.selectedPieceIds=[...new Set([...w.selectedPieceIds.filter(id=>!macros.some(p=>p.id===id)),...standard])];
+      w.quantity=w.selectedPieceIds.length;w.unspecifiedQuantity=0;
+      if(w.process==='Trabajo anterior')w.process='Pintura';
+      w.total=w.employeeId?Math.round((w.mode==='Por pieza'?w.quantity*w.rate:w.rate)*100)/100:0;
+      w.fullPaintExpandedAt=at;
+    }
+    for(const p of macros){p.retired=true;p.expandedInto=[...standard];p.retiredAt=at;}
+    o.fullPaintExpandedAt=at;
+  }
+  d.meta.push({id:'full-paint-13-v1',workshopId:1,at});return true;
+}
 export const worksFor=(d,orderId,includeCancelled=false)=>(d.workAssignments||[]).filter(w=>Number(w.orderId)===Number(orderId)&&(includeCancelled||!w.cancelled)).sort((a,b)=>(PROCESSES.includes(a.process)?PROCESSES.indexOf(a.process):99)-(PROCESSES.includes(b.process)?PROCESSES.indexOf(b.process):99)||String(a.createdAt).localeCompare(String(b.createdAt))||a.id.localeCompare(b.id));
 export const piecesFor=(d,orderId,includeRetired=false)=>{
   const rank=id=>{const index=PIECE_CATALOG.findIndex(p=>p.id===id);return index<0?99:index;};

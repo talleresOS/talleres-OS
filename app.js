@@ -1,4 +1,5 @@
 import {createDocumentUI} from './document-ui.mjs';
+import {createAssistantUI} from './assistant-ui.mjs';
 import {TallerService} from './service.mjs';
 import {createWorkUI} from './work-ui.mjs';
 import {worksFor,piecesFor} from './work-model.mjs';
@@ -23,6 +24,7 @@ const vehicleText=o=>{const v=vehicle(o);return [v.brand,v.model,v.year].filter(
 const badge=label=>'<span class="badge">'+esc(label)+'</span>';
 const workUI=createWorkUI({service,data:()=>d,context:()=>formContext,esc,button,field,select,textarea,row,badge,empty,money,date,openDialog,confirmAction,toast,render,navigate,download});
 const documentUI=createDocumentUI({service,data:()=>d,esc,button,field,select,textarea,row,money,openDialog,render,toast,download});
+const assistantUI=createAssistantUI({service,render,esc,toast,onOrderCreated:async orderId=>{d=await service.state();pendingReception=find(d,'orders',orderId)?.initialReceipt;orderTab='work';navigate('order/'+orderId);}});
 // Appearance is presentation-only and persists in the existing settings record.
 const appearanceDefaults={theme:'dark',primary:'#eec567',accent:'#69c9c1'};
 function appearance(){const v=d.settings[0]?.appearance||{};return {theme:v.theme==='light'?'light':'dark',primary:/^#[0-9a-f]{6}$/i.test(v.primary)?v.primary:appearanceDefaults.primary,accent:/^#[0-9a-f]{6}$/i.test(v.accent)?v.accent:appearanceDefaults.accent};}
@@ -290,6 +292,7 @@ document.addEventListener('input',event=>{
 document.addEventListener('change',async event=>{
   const target=event.target;
   try{
+    if(target.name==='receptionPieceName'&&documentUI.isFullPaint(target.value))documentUI.expandFullPaint();
     if(target.name==='period'){selectedMonth=target.value||today().slice(0,7);monthPage();}
     if(target.name==='clientId'&&target.closest('[data-form="order"]')){const s=dialog.querySelector('[name="vehicleId"]');s.innerHTML='<option value="">Seleccionar</option>'+d.vehicles.filter(v=>v.clientId===Number(target.value)&&!v.archived).map(v=>'<option value="'+v.id+'">'+esc(v.brand+' '+v.model+' '+(v.plate||''))+'</option>').join('');}
     if(target.name==='employeeId'&&target.closest('[data-form="work-assignment"]')&&!formContext.locked)dialog.querySelector('[name="rate"]').value=find(d,'employees',target.value)?.pieceRate||0;

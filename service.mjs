@@ -1,4 +1,5 @@
 import {Storage} from './storage.mjs';
+import {assistantMethods} from './assistant-service.mjs';
 import {workMethods} from './work-service.mjs';
 import {catalog,worksFor,PROCESSES} from './work-model.mjs';
 import {customerReception} from './domain.mjs';
@@ -77,21 +78,7 @@ export class TallerService {
       if(v.creationToken)row.creationToken=text(v.creationToken);
       if(v.createReception){
         assert(Array.isArray(v.receptionPieces),'Revisa las piezas y procesos.');
-        const groups=new Map();
-        for(const item of v.receptionPieces){
-          assert(text(item.name)&&text(item.name).length<=100&&Array.isArray(item.processes)&&item.processes.length,'Cada pieza necesita un nombre y al menos un proceso.');
-          assert(item.processes.every(p=>PROCESSES.includes(p)),'Proceso inválido.');
-          assert(!groups.has(text(item.name).toLocaleLowerCase()),'Una pieza está repetida. Selecciona sus procesos en una misma fila.');
-          groups.set(text(item.name).toLocaleLowerCase(),true);
-          const known=catalog(s).find(p=>p.name===text(item.name));
-          const piece=this.add(d,'vehiclePieces',{orderId:row.id,catalogId:known?.id||'custom-'+uid(),name:text(item.name),retired:false,createdAt:row.createdAt});
-          if(!known)(s.customPieces ||= []).push({id:piece.catalogId,name:piece.name});
-          for(const process of new Set(item.processes)){
-            let work=d.workAssignments.find(w=>belongs(w,row.id)&&w.process===process);
-            if(!work)work=this.add(d,'workAssignments',{orderId:row.id,process,employeeId:null,selectedPieceIds:[],unspecifiedQuantity:0,quantity:0,mode:'Por pieza',rate:0,total:0,role:'',notes:'',sourceAssignmentId:uid(),status:'Pendiente',ledgerState:'unassigned',cancelled:false,createdAt:row.createdAt});
-            work.selectedPieceIds.push(piece.id);work.quantity=work.selectedPieceIds.length;
-          }
-        }
+        this.addReceptionWorks(d,row,v.receptionPieces);
         const initial=amount(v.initialAmount||0,true);assert(initial<=total,'El abono inicial supera el precio acordado.');
         if(initial){
           assert(METHODS.includes(v.initialMethod),'Selecciona el método del abono.');
@@ -326,3 +313,4 @@ export class TallerService {
   }
 }
 Object.assign(TallerService.prototype,workMethods);
+Object.assign(TallerService.prototype,assistantMethods);

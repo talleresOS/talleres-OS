@@ -6,3 +6,11 @@ TallerOS-copia-*.json
 node_modules/
 
 dist/
+local-backups/
+
+# Credenciales privadas del servidor; nunca publicar.
+.env
+.env.*
+!.env.example
+server/.secrets/
+.vercel/

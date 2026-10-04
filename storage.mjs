@@ -1,5 +1,5 @@
 import {MAIN,STORES,normalize,uid,VERSION} from './domain.mjs';
-import {migrateWorkModel,WORK_STATES} from './work-model.mjs';
+import {migrateWorkModel,migrateFullPaint,WORK_STATES} from './work-model.mjs';
 const req = r => new Promise((resolve,reject)=>{r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
 const done = tx => new Promise((resolve,reject)=>{tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error||Error('No se guardaron los cambios.'));tx.onabort=()=>reject(tx.error||Error('Operación cancelada.'));});
 export class Storage {
@@ -49,12 +49,13 @@ export class Storage {
   async migrate(){
     const legacy=await this.legacy();
     return this.transact(d=>{
-      if(d.meta.some(x=>x.id==='phase2')){const changed=migrateWorkModel(d);this.backupBeforeDocuments(d);return changed;}
+      if(d.meta.some(x=>x.id==='phase2')){const changed=migrateWorkModel(d);this.backupBeforeDocuments(d);return migrateFullPaint(d)||changed;}
       const before={main:Object.fromEntries(MAIN.map(s=>[s,structuredClone(d[s])])),ledger:structuredClone(legacy)};
       d.snapshots.push({id:'before-phase2',workshopId:1,createdAt:new Date().toISOString(),reason:'Recuperación anterior a Fase 2',payload:before});
       normalize(d,legacy);
       migrateWorkModel(d);
       this.backupBeforeDocuments(d);
+      migrateFullPaint(d);
       return true;
     });
   }
@@ -114,6 +115,7 @@ export class Storage {
       normalize(d,{});
       migrateWorkModel(d);
       const setting=d.settings.find(x=>x.workshopId===1);
+      migrateFullPaint(d);
       setting.orderSequence=Math.max(Number(setting.orderSequence)||0,protectedSequence,...d.orders.map(o=>Number(String(o.number).match(/(\d+)$/)?.[1]||0)));
       setting.invoiceSequence=Math.max(Number(setting.invoiceSequence)||0,protectedInvoices,...d.invoices.map(i=>Number(String(i.number).match(/(\d+)$/)?.[1]||0)));
       setting.quoteSequence=Math.max(Number(setting.quoteSequence)||0,protectedQuotes,...d.quotations.map(q=>Number(String(q.number).match(/(\d+)$/)?.[1]||0)));

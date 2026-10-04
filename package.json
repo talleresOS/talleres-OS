@@ -1,15 +1,19 @@
 {
   "name": "talleros-revivauto",
-  "version": "2.2.0",
+  "version": "2.5.0",
   "private": true,
   "type": "module",
   "scripts": {
     "build": "node prepare-release.mjs",
-    "test": "node tests/phase2.mjs && node tests/edge-cases.mjs",
-    "test:ui": "node tests/ui-refresh.mjs",
-    "test:upgrade": "node tests/ui-upgrade.mjs"
+    "test": "node tests/work-model.mjs && node tests/work-ui.mjs && node tests/work-migration.mjs && node tests/phase2.mjs && node tests/edge-cases.mjs && node tests/documents-model.mjs && node tests/documents-upgrade.mjs && node tests/documents.mjs && node tests/final-audit.mjs && node tests/update-notice.mjs && node tests/assistant.mjs && node tests/assistant-ui.mjs && node tests/assistant-server.mjs && node tests/assistant-safety.mjs && node tests/vercel.mjs && node tests/assignment-consolidation.mjs && node tests/assistant-intake.mjs",
+    "test:ui": "node tests/work-ui.mjs",
+    "test:upgrade": "node tests/work-migration.mjs",
+    "start:assistant": "node server/server.mjs"
   },
   "devDependencies": {
     "playwright": "1.62.1"
+  },
+  "engines": {
+    "node": "24.x"
   }
 }

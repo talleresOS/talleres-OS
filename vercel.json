@@ -1,0 +1,16 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "buildCommand": "node prepare-release.mjs",
+  "installCommand": "node -e \"console.log('Runtime sin dependencias externas')\"",
+  "outputDirectory": "dist",
+  "functions": {"api/assistant.mjs": {"maxDuration": 60, "excludeFiles": "{.test-results/**,local-backups/**,server/.env*,.git/**}"}},
+  "rewrites": [{"source": "/api/assistant/:action", "destination": "/api/assistant?action=:action"}],
+  "headers": [
+    {"source": "/(.*)", "headers": [{"key": "X-Content-Type-Options", "value": "nosniff"}, {"key": "Referrer-Policy", "value": "strict-origin-when-cross-origin"}, {"key": "X-Frame-Options", "value": "SAMEORIGIN"}]},
+    {"source": "/sw.js", "headers": [{"key": "Cache-Control", "value": "no-cache, no-store, must-revalidate"}]},
+    {"source": "/version.json", "headers": [{"key": "Cache-Control", "value": "no-store"}]},
+    {"source": "/index.html", "headers": [{"key": "Cache-Control", "value": "no-cache, must-revalidate"}]},
+    {"source": "/api/(.*)", "headers": [{"key": "Cache-Control", "value": "no-store"}]}
+  ]
+}

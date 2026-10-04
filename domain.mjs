@@ -1,5 +1,5 @@
 import {worksFor,piecesFor,workPieceNames,oldAssignmentMapped} from './work-model.mjs';
-export const VERSION = '2.4.1';
+export const VERSION = '2.5.0';
 export const MAIN = ['settings','clients','vehicles','orders','parts','employees','payments','costs'];
 export const EXTRA = ['ledgerAccounts','ledgerAccruals','ledgerPayments','invoices','inventory','inventoryMoves','events','monthlyClosures','meta','snapshots','vehiclePieces','workAssignments','quotations'];
 export const STORES = [...MAIN,...EXTRA];
