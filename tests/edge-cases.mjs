@@ -18,7 +18,7 @@ const server=createServer(async(req,res)=>{
   }catch(e){res.writeHead(404);res.end(e.message);}
 });
 await new Promise(r=>server.listen(0,'127.0.0.1',r));const origin='http://localhost:'+server.address().port;
-const browser=await chromium.launch({headless:true,executablePath:process.env.TALLEROS_BROWSER||'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'});
+const browser=await chromium.launch({headless:true,...(process.env.TALLEROS_BROWSER?{executablePath:process.env.TALLEROS_BROWSER}:{})});
 const results=[];function pass(name,detail){results.push({name,status:'passed',detail});console.log('PASS '+name);}
 try{
   const ctx=await browser.newContext({serviceWorkers:'block'}),p=await ctx.newPage();await p.goto(origin+'/blank');

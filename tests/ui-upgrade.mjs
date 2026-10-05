@@ -12,7 +12,7 @@ const previous=Object.fromEntries(names.map(name=>[name,execFileSync('git',['sho
 let old=true;
 const server=createServer(async(req,res)=>{try{const name=new URL(req.url,'http://localhost').pathname.slice(1)||'index.html';if(!names.includes(name))throw Error('path');res.setHeader('cache-control','no-cache');res.setHeader('content-type',({'.html':'text/html','.js':'application/javascript','.mjs':'application/javascript','.css':'text/css','.json':'application/json','.png':'image/png','.svg':'image/svg+xml','.webmanifest':'application/manifest+json'})[path.extname(name)]);res.end(old?previous[name]:await readFile(path.join(root,name)));}catch{res.writeHead(404);res.end();}});
 await new Promise(r=>server.listen(0,'127.0.0.1',r));const origin='http://localhost:'+server.address().port;
-const browser=await chromium.launch({headless:true,executablePath:process.env.TALLEROS_BROWSER||'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'});
+const browser=await chromium.launch({headless:true,...(process.env.TALLEROS_BROWSER?{executablePath:process.env.TALLEROS_BROWSER}:{})});
 const ctx=await browser.newContext();let p=await ctx.newPage();p.setDefaultTimeout(15000);
 try{
  await p.goto(origin+'/index.html');await p.locator('.top').waitFor();

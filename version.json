@@ -1,6 +1,6 @@
 {
   "name": "TallerOS",
-  "version": "2.5.0",
+  "version": "3.0.0",
   "phase": 2,
   "date": "2026-10-04",
   "baseCommit": "383c790",
@@ -9,6 +9,7 @@
     "name": "talleros2",
     "version": 3
   },
-  "build": "2.5.0-assistant-pilot-20261004",
-  "productionBaseCommit": "c01491d190d72d9d4971d4b27f24146dac85386d"
+  "build": "3.0.0-independence-20261004",
+  "productionBaseCommit": "c01491d190d72d9d4971d4b27f24146dac85386d",
+  "release": "Independence Release"
 }

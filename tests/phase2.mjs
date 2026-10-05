@@ -19,7 +19,7 @@ const server=createServer(async(req,res)=>{
 });
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 const origin='http://127.0.0.1:'+server.address().port;
-const launch={headless:true,executablePath:process.env.TALLEROS_BROWSER||'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'};
+const launch={headless:true,...(process.env.TALLEROS_BROWSER?{executablePath:process.env.TALLEROS_BROWSER}:{})};
 const browser=await playwright.chromium.launch(launch);
 const results=[],errors=[];
 const record=(name,detail)=>{results.push({name,status:'passed',detail});console.log('PASS '+name);};

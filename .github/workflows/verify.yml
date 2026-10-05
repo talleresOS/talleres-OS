@@ -1,0 +1,26 @@
+name: Verify TallerOS
+on:
+  push:
+    branches: ["codex/**"]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install locked development dependencies
+        run: npx --yes pnpm@11.25.0 install --frozen-lockfile
+      - name: Install test browser
+        run: npx --yes pnpm@11.25.0 exec playwright install --with-deps chromium
+      - run: npm run build
+      - run: npm run check:release
+      - run: npm test
+      - run: npm run test:runtime
+      # No deployment, workshop data, secrets or browser profiles are uploaded.

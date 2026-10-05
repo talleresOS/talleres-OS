@@ -1,5 +1,8 @@
 # Las copias de seguridad contienen datos privados del taller.
 TallerOS-copia-*.json
+TallerOS-backup-*.json
+TallerOS-recuperacion-*.json
+TallerOS-antes-modelo-*.json
 *.local.json
 
 .test-results/
@@ -14,3 +17,6 @@ local-backups/
 !.env.example
 server/.secrets/
 .vercel/
+playwright-report/
+test-results/
+*.log

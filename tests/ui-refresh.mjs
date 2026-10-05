@@ -15,7 +15,7 @@ const server=createServer(async(req,res)=>{
 await new Promise(r=>server.listen(0,'127.0.0.1',r));
 const origin='http://127.0.0.1:'+server.address().port;
 const profile=await mkdtemp(path.join(out,'ui-profile-'));
-const opts={headless:true,executablePath:process.env.TALLEROS_BROWSER||'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',viewport:{width:390,height:844},isMobile:true,hasTouch:true,serviceWorkers:'block'};
+const opts={headless:true,...(process.env.TALLEROS_BROWSER?{executablePath:process.env.TALLEROS_BROWSER}:{}),viewport:{width:390,height:844},isMobile:true,hasTouch:true,serviceWorkers:'block'};
 let ctx=await chromium.launchPersistentContext(profile,opts),p=ctx.pages()[0],errors=[];
 const results=[],pass=(name,detail)=>{results.push({name,detail,status:'passed'});console.log('PASS '+name);};
 const watch=()=>{p.setDefaultTimeout(15000);p.on('pageerror',e=>errors.push(e.message));};watch();

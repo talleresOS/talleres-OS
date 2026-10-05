@@ -5,7 +5,16 @@ node_modules
 **/.env
 **/.env.*
 TallerOS-copia-*.json
+TallerOS-backup-*.json
+TallerOS-recuperacion-*.json
+TallerOS-antes-modelo-*.json
 *.local.json
 tests
 docs
 .openai
+scripts
+.github
+AGENTS.md
+CONTINUIDAD.md
+playwright-report
+test-results

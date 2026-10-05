@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {execFileSync} from 'node:child_process';
+import {legacySource} from './legacy-source.mjs';
 import {createServer} from 'node:http';
 import {readFile,writeFile,mkdir} from 'node:fs/promises';
 import path from 'node:path';
@@ -8,8 +8,8 @@ import {root,out} from './harness.mjs';
 await mkdir(out,{recursive:true});
 const {chromium}=await import(process.env.TALLEROS_PLAYWRIGHT?pathToFileURL(process.env.TALLEROS_PLAYWRIGHT).href:'playwright');
 const oldNames=['index.html','app.js','styles.css','domain.mjs','storage.mjs','service.mjs','pwa.js','sw.js','version.json','manifest.json','manifest.webmanifest','icon.svg','icon-192.png','icon-512.png','apple-touch-icon.png'];
-const names=[...oldNames,'work-model.mjs','work-service.mjs','work-ui.mjs','logo-palette.mjs','documents.mjs','documents-style.mjs','document-ui.mjs',"interface.css","assistant-contract.mjs","assistant-core.mjs","assistant-service.mjs","assistant-provider.mjs","assistant-voice.mjs","assistant-ui.mjs"];
-const oldSource=Object.fromEntries(oldNames.map(name=>[name,execFileSync('git',['show','v2.2.0:'+name],{cwd:root})]));
+const names=[...oldNames,'work-model.mjs','work-service.mjs','work-ui.mjs','logo-palette.mjs','documents.mjs','documents-style.mjs','document-ui.mjs',"backup.mjs","interface.css","assistant-contract.mjs","assistant-core.mjs","assistant-service.mjs","assistant-provider.mjs","assistant-voice.mjs","assistant-ui.mjs"];
+const oldSource=await legacySource('2.2.0',oldNames);
 let old=true;
 const server=createServer(async(req,res)=>{try{
  const name=new URL(req.url,'http://localhost').pathname.slice(1)||'index.html';if(!names.includes(name))throw Error('path');
@@ -17,7 +17,7 @@ const server=createServer(async(req,res)=>{try{
  res.end(old?oldSource[name]:await readFile(path.join(root,name)));
 }catch{res.writeHead(404);res.end();}});
 await new Promise(r=>server.listen(0,'127.0.0.1',r));const origin='http://localhost:'+server.address().port;
-const browser=await chromium.launch({headless:true,executablePath:process.env.TALLEROS_BROWSER||'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'}),ctx=await browser.newContext();
+const browser=await chromium.launch({headless:true,...(process.env.TALLEROS_BROWSER?{executablePath:process.env.TALLEROS_BROWSER}:{})}),ctx=await browser.newContext();
 let p=await ctx.newPage();p.setDefaultTimeout(20000);
 try{
  await p.goto(origin+'/index.html');await p.locator('.top').waitFor();await p.evaluate(()=>navigator.serviceWorker.ready.then(()=>true));await p.reload();await p.locator('.top').waitFor();
@@ -39,7 +39,7 @@ try{
  await p.evaluate(async()=>{const r=await navigator.serviceWorker.getRegistration();await r.update();});
  await p.waitForFunction(async()=>!!(await navigator.serviceWorker.getRegistration())?.waiting);
  await p.close();await new Promise(r=>setTimeout(r,1200));p=await ctx.newPage();p.setDefaultTimeout(20000);await p.goto(origin+'/index.html');await p.locator('.top').waitFor();
- await p.waitForFunction(async()=>{const c=await caches.keys();return c.includes('talleros-phase2-2.5.0-20261004')&&!c.includes('talleros-phase2-2.2.0');});
+ await p.waitForFunction(async()=>{const c=await caches.keys();return c.includes('talleros-phase2-3.0.0-independence-20261004')&&!c.includes('talleros-phase2-2.2.0');});
  const migrated=await p.evaluate(async()=>{
   const {TallerService}=await import('./service.mjs'),{financial,employeeSummary}=await import('./domain.mjs'),s=new TallerService(),d=await s.init();return {d,finance:d.orders.map(o=>financial(d,o)),employee:employeeSummary(d,d.employees[0].id),recovery:await s.storage.previousModelBackup()};
  });
@@ -64,6 +64,6 @@ try{
  },original.backup);
  assert.equal(restored.snapshotSame,true);assert.equal(restored.works.length,2);assert.deepEqual(restored.originals,original.d.parts);assert.deepEqual(restored.payments,original.d.ledgerPayments);
  await ctx.setOffline(true);await p.reload();await p.getByText('5 piezas sin especificar',{exact:true}).waitFor();
- await writeFile(path.join(out,'work-migration-results.json'),JSON.stringify({status:'passed',from:'2.2.0',to:'2.5.0',schema:'2 → 3',cases:[9,10],historicalDataPreserved:true,noInventedPieces:true,accruals:2500,paid:1000,balance:1500,offline:true,importV2:true,originalSnapshotPreserved:true},null,2));
- console.log('PASS Migración real 2.2.0 → 2.5.0: registros y finanzas históricas idénticos, cinco piezas sin especificar, identificación segura, importación v2 e inicio offline.');
+ await writeFile(path.join(out,'work-migration-results.json'),JSON.stringify({status:'passed',from:'2.2.0',to:'3.0.0',schema:'2 → 3',cases:[9,10],historicalDataPreserved:true,noInventedPieces:true,accruals:2500,paid:1000,balance:1500,offline:true,importV2:true,originalSnapshotPreserved:true},null,2));
+ console.log('PASS Migración real 2.2.0 → 3.0.0: registros y finanzas históricas idénticos, cinco piezas sin especificar, identificación segura, importación v2 e inicio offline.');
 }finally{await browser.close();await new Promise(r=>server.close(r));}

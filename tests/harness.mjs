@@ -16,7 +16,7 @@ export async function start({serviceWorkers='block'}={}){
  }catch{res.writeHead(404);res.end();}});
  await new Promise(r=>server.listen(0,'127.0.0.1',r));
  const origin='http://localhost:'+server.address().port;
- const launch={headless:true,executablePath:process.env.TALLEROS_BROWSER||'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'};
+ const launch={headless:true,...(process.env.TALLEROS_BROWSER?{executablePath:process.env.TALLEROS_BROWSER}:{})};
  const browser=await chromium.launch(launch),context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,serviceWorkers});
  const page=await context.newPage(),errors=[];page.setDefaultTimeout(12000);page.on('pageerror',e=>errors.push(e.message));
  return {browser,context,page,origin,errors,chromium,launch,stop:async()=>{await browser.close();await new Promise(r=>server.close(r));}};
