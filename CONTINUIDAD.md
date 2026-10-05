@@ -1,3 +1,13 @@
+# Estado vigente — rediseño publicado y verificado · 05/10/2026
+
+Build 3.0.0-visual-20261005b. Fuente funcional 02a334c3f1d93b79a05eeafb7e2cbddb2c8ce5f0 en codex/visual-3-0. main f80cc2381b59dc434096600c2f53c50288950fee. Pages 37385663302 correcto; 32 hashes coincidentes y flujo completo/móvil/offline verificado. 20 suites + runtime + build aprobados localmente y en GitHub Actions 37385477892.
+
+Ver docs/VISUAL-3.0.0.md. No repetir el sistema de piezas/asignaciones ni el asistente local: están implementados y probados. Pendiente externo: backend Vercel, saldo/acceso OpenAI real, prueba física iPhone/voz. Sin nuevas migraciones, sin cambios de URL ni datos. Siguiente paso: uso del propietario en iPhone; continuar sobre codex/visual-3-0.
+
+Los apartados siguientes son antecedentes.
+
+---
+
 # Actualización visual en verificación — 05/10/2026
 
 Build 3.0.0-visual-20261005b en rama codex/visual-3-0. 20 suites + runtime/build aprobados. Ver docs/VISUAL-3.0.0.md. No repetir piezas/asistente ya implementados. La publicación autorizada conserva la URL y el esquema 3.

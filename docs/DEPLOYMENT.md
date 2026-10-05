@@ -2,9 +2,9 @@
 
 ## Estado y fuentes
 
-Producción vigente: https://talleresos.github.io/talleres-OS/index.html (3.0.0), main 935a4dad49339761691f4057722fc92092f20d12. Código completo: codex/independence-3-0. El usuario autorizó publicar en la misma URL el 05/10/2026. Pages 37308159560 terminó correctamente; los 30 hashes y el flujo móvil sobre la URL real se verificaron.
+Producción vigente: https://talleresos.github.io/talleres-OS/index.html (3.0.0), main f80cc2381b59dc434096600c2f53c50288950fee. Código completo: codex/visual-3-0. El usuario autorizó publicar en la misma URL el 05/10/2026. Pages 37385663302 terminó correctamente; los 32 hashes y el flujo móvil sobre la URL real se verificaron.
 
-main conserva el mecanismo histórico de distribución estática y sus archivos previos; se actualizaron exclusivamente los 30 recursos de dist y release-manifest.json. Para desarrollo/backend/pruebas usar la rama de código completo, no las herramientas históricas de main. Recuperación 2.4.1: codex/stable-before-independence-3-0.
+main conserva el mecanismo histórico de distribución estática y sus archivos previos; se actualizaron exclusivamente los 32 recursos de dist y release-manifest.json. Para desarrollo/backend/pruebas usar la rama de código completo, no las herramientas históricas de main. Recuperación 2.4.1: codex/stable-before-independence-3-0.
 
 No usar Sites ni el archivo histórico .openai/hosting.json para reemplazar el hosting. Un cambio de código no transfiere datos del navegador.
 
@@ -19,7 +19,7 @@ npm test
 npm run test:runtime
 ```
 
-dist contiene 30 recursos públicos y release-manifest.json. Este último identifica sus hashes SHA-256. No editar dist; corregir raíz y volver a generar. El build se detiene ante archivos extra o una posible clave en un recurso público.
+dist contiene 32 recursos públicos y release-manifest.json. Este último identifica sus hashes SHA-256. No editar dist; corregir raíz y volver a generar. El build se detiene ante archivos extra o una posible clave en un recurso público.
 
 El workflow Verify TallerOS solo verifica; no publica ni sube perfiles/backups. No confundirlo con un despliegue.
 
@@ -28,11 +28,11 @@ El workflow Verify TallerOS solo verifica; no publica ni sube perfiles/backups. 
 Requiere una sesión del propietario y permisos sobre talleresOS/talleres-OS; este acceso no estaba disponible. Todo el código de build/backend está preparado.
 
 1. Entrar a Vercel, conectar GitHub e importar ese repositorio en un proyecto nuevo. Revisar condiciones/costos del plan antes de aceptar un cargo.
-2. Conservar main como rama de producción existente en GitHub. Generar un **Preview** de codex/independence-3-0; no hacer merge ni promoverlo automáticamente.
+2. Conservar main como rama de producción existente en GitHub. Generar un **Preview** de codex/visual-3-0; no hacer merge ni promoverlo automáticamente.
 3. Framework Other; Node 24. Mantener vercel.json: build `node prepare-release.mjs`, output `dist`, instalación sin dependencias de runtime. api/assistant.mjs es función Node y server/*.mjs código privado.
 4. Para Preview, configurar OPENAI_API_KEY y ASSISTANT_ACCESS_CODE como secretos del servidor; los otros nombres están en .env.example. Añadir ASSISTANT_ALLOWED_ORIGINS con orígenes exactos si corresponde. Nunca VITE_/NEXT_PUBLIC_ ni inyectar variables en JS público. Empezar con ASSISTANT_ENABLED=false permite verificar la app sin gasto API.
 5. Desplegar Preview. Las variables nuevas requieren redeploy. Mantener protección de Preview si la cuenta la ofrece. Si bloquea pruebas remotas, acceder por la sesión legítima; no desactivar protecciones innecesariamente.
-6. Verificar /version.json = 3.0.0 y build 3.0.0-independence-20261004. Comparar release-manifest.json y recursos con el build local. Comprobar que /.env, /server/.env.local y archivos de respaldo no se sirven.
+6. Verificar /version.json = 3.0.0 y build 3.0.0-visual-20261005b. Comparar release-manifest.json y recursos con el build local. Comprobar que /.env, /server/.env.local y archivos de respaldo no se sirven.
 7. Probar con datos sintéticos el flujo cliente → vehículo → orden → abono → comprobante → producción → cobro → garantía → cierre → factura → historial. Exportar/importar, recargar y probar sin conexión. Abrir desde iPhone real.
 8. Si se desea IA, configurar saldo/clave válida privadamente en OpenAI, habilitarla y ejecutar una consulta y una operación confirmada con datos sintéticos. No afirmar funcionamiento real usando solo mocks.
 9. Solo después de estas comprobaciones decidir una promoción de producción. Esta fase **no autoriza cambiar el dominio/URL existente automáticamente**.

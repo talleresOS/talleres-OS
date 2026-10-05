@@ -3,8 +3,8 @@
 ## Proyecto y alcance
 - Trabajo actual: codex/visual-3-0; consultar docs/VISUAL-3.0.0.md y el encabezado más reciente de CONTINUIDAD.md. dashboard-ui.mjs es presentación de solo lectura; --workshop-image permite cambiar el fondo.
 - Repositorio maestro: https://github.com/talleresOS/talleres-OS.
-- Producción: https://talleresos.github.io/talleres-OS/index.html, main 3.0.0 publicada y verificada el 05/10/2026; commit 935a4dad49339761691f4057722fc92092f20d12.
-- Código completo 3.0.0 en rama codex/independence-3-0; main mantiene la distribución estática existente. Leer CONTINUIDAD.md y docs/INDEPENDENCE-3.0.0.md antes de actuar. Los informes 2.x son antecedentes.
+- Producción: https://talleresos.github.io/talleres-OS/index.html, main 3.0.0 publicada y verificada el 05/10/2026; commit f80cc2381b59dc434096600c2f53c50288950fee.
+- Código completo 3.0.0 en rama codex/visual-3-0; main mantiene la distribución estática existente. Leer CONTINUIDAD.md y docs/INDEPENDENCE-3.0.0.md antes de actuar. Los informes 2.x son antecedentes.
 - No reconstruir, resetear datos ni sustituir funciones existentes. Trabajar incrementalmente y conservar compatibilidad.
 - El usuario autorizó preparar app + backend en Vercel como despliegue paralelo. El 05/10/2026 autorizó publicar 3.0 en el GitHub Pages existente: completado. No cambiar URL ni promover Vercel hasta verificar Preview y contar con autorización aplicable. Preparado no equivale a desplegado/probado.
 - No usar Sites ni .openai/hosting.json para sustituir el origen existente.

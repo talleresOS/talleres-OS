@@ -1,6 +1,6 @@
 # TallerOS 3.0 — actualización visual
 Build: 3.0.0-visual-20261005b. Rama: codex/visual-3-0. Base estable: 935a4dad49339761691f4057722fc92092f20d12.
-Estado: verificaciones locales aprobadas; publicación y verificación remotas se registran al final.
+Estado: publicada y verificada en la URL existente.
 
 ## Qué ya estaba hecho
 Piezas físicas y procesos independientes; pintura completa selecciona 13 piezas editables; asignación parcial por empleado; devengos idempotentes; recepción y factura final; garantías; respaldos validados; asistente local con consultas/acciones confirmadas, contexto y voz del navegador. No se reimplementaron.
@@ -30,3 +30,14 @@ iPhone/Safari físico y micrófono real requieren prueba del propietario. El bac
 Herramienta: image_gen.imagegen integrada; no llamadas con la clave privada del proyecto.
 Prompt de diseño: fotografía realista de un taller automotriz premium, grafito oscuro e iluminación cálida dorada, SUV negro a la derecha con técnico trabajando, espacio oscuro a la izquierda para titulares, sin logos, texto ni interfaz. Optimización a WebP con Sharp, sin alterar el contenido.
 Artefacto original: generated_images/01a0fa0e-ba7d-74d1-ae98-6d20c24abef7/exec-d94d48ba-3d66-4439-9ac8-84d1a2147486.png.
+
+## Código y validación remota
+Fuente funcional: 02a334c3f1d93b79a05eeafb7e2cbddb2c8ce5f0 en codex/visual-3-0. GitHub Actions 37385477892 aprobó build, check:release, las 20 suites y runtime independiente en Linux. Los 32 recursos de dist coinciden con los blobs de esa fuente. Se confirmó que 16 módulos operativos/de datos/documentos/asistente son idénticos a la base anterior.
+Punto estable de recuperación: codex/stable-before-visual-3-0 → 935a4dad49339761691f4057722fc92092f20d12.
+Main actualizado: f80cc2381b59dc434096600c2f53c50288950fee. Pages 37385663302 terminó correctamente.
+
+## Verificación de producción
+https://talleresos.github.io/talleres-OS/index.html sirve exactamente los 32 hashes y el manifiesto del build 3.0.0-visual-20261005b.
+Se ejecutó sobre la URL real, en contexto móvil aislado, cliente → vehículo → orden/abono 20,000 → comprobante → asignaciones/producción → pago final 40,000 → garantía → factura → historial. Dos pagos reales, total 60,000, saldo cero y sin errores JS. Dashboard revisado en 375 y 1440 px; campos móviles 16 px. Recarga offline e historial correctos.
+Evidencia local: .test-results/visual-30 y .test-results/published-visual-3.0 (solo datos sintéticos, no se publican). No se tocó la base del propietario.
+Para recibir la nueva caché, guardar cambios, cerrar todas las pestañas/ventanas de TallerOS y abrir la misma URL. No borrar datos del navegador.
