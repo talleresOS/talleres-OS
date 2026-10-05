@@ -32,7 +32,7 @@ try{
  for(const width of [320,375,390,430,1280,1440]){
  await p.setViewportSize({width,height:width>800?1000:844});
  for(const route of ['home','vehicles','payments','expenses','orders','clients','production','employees','inventory','monthly','settings','more']){
- await go(route);assert.ok(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),theme+' '+width+' '+route);
+ await go(route);assert.ok(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),theme+' '+width+' '+route);if(width<=800)assert.ok(await p.locator('#global-search').evaluate(el=>parseFloat(getComputedStyle(el).fontSize)>=16),'Mobile search must avoid iOS focus zoom');
  }
  if(width===390||width===1440){await go('home');await p.screenshot({path:path.join(out,'visual-'+theme+'-'+width+'.png'),fullPage:true});}
  }

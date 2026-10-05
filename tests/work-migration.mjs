@@ -39,7 +39,7 @@ try{
  await p.evaluate(async()=>{const r=await navigator.serviceWorker.getRegistration();await r.update();});
  await p.waitForFunction(async()=>!!(await navigator.serviceWorker.getRegistration())?.waiting);
  await p.close();await new Promise(r=>setTimeout(r,1200));p=await ctx.newPage();p.setDefaultTimeout(20000);await p.goto(origin+'/index.html');await p.locator('.top').waitFor();
- await p.waitForFunction(async()=>{const c=await caches.keys();return c.includes('talleros-phase2-3.0.0-visual-20261005')&&!c.includes('talleros-phase2-2.2.0');});
+ await p.waitForFunction(async()=>{const c=await caches.keys();return c.includes('talleros-phase2-3.0.0-visual-20261005b')&&!c.includes('talleros-phase2-2.2.0');});
  const migrated=await p.evaluate(async()=>{
   const {TallerService}=await import('./service.mjs'),{financial,employeeSummary}=await import('./domain.mjs'),s=new TallerService(),d=await s.init();return {d,finance:d.orders.map(o=>financial(d,o)),employee:employeeSummary(d,d.employees[0].id),recovery:await s.storage.previousModelBackup()};
  });

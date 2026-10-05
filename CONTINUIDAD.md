@@ -1,6 +1,6 @@
 # Actualización visual en verificación — 05/10/2026
 
-Build 3.0.0-visual-20261005 en rama codex/visual-3-0. 20 suites + runtime/build aprobados. Ver docs/VISUAL-3.0.0.md. No repetir piezas/asistente ya implementados. La publicación autorizada conserva la URL y el esquema 3.
+Build 3.0.0-visual-20261005b en rama codex/visual-3-0. 20 suites + runtime/build aprobados. Ver docs/VISUAL-3.0.0.md. No repetir piezas/asistente ya implementados. La publicación autorizada conserva la URL y el esquema 3.
 
 # Estado vigente — 05/10/2026
 

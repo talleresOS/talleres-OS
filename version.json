@@ -9,7 +9,7 @@
     "name": "talleros2",
     "version": 3
   },
-  "build": "3.0.0-visual-20261005",
+  "build": "3.0.0-visual-20261005b",
   "productionBaseCommit": "935a4dad49339761691f4057722fc92092f20d12",
   "release": "Visual Release"
 }

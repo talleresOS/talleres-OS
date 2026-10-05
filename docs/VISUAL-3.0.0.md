@@ -1,5 +1,5 @@
 # TallerOS 3.0 — actualización visual
-Build: 3.0.0-visual-20261005. Rama: codex/visual-3-0. Base estable: 935a4dad49339761691f4057722fc92092f20d12.
+Build: 3.0.0-visual-20261005b. Rama: codex/visual-3-0. Base estable: 935a4dad49339761691f4057722fc92092f20d12.
 Estado: verificaciones locales aprobadas; publicación y verificación remotas se registran al final.
 
 ## Qué ya estaba hecho
@@ -19,7 +19,7 @@ No se modificaron domain.mjs, storage.mjs, service.mjs, work-model.mjs, work-ser
 20 suites existentes/nueva aprobadas mediante pnpm test. Runtime independiente y check:release aprobados.
 Flujo completo: cliente → vehículo → orden/abono → comprobante → piezas/procesos/empleados → producción → costos/pagos → garantía → cierre → factura → historial.
 Pruebas de recuperación desde versiones 2.2/2.3, persistencia al cerrar navegador, respaldo/restauración y caché offline aprobadas.
-Dashboard: 12 vistas × 6 anchos (320,375,390,430,1280,1440) × 2 temas sin desbordes; capturas revisadas. Se corrigió el margen heredado que desalineaba los paneles y el peso de etiquetas secundarias.
+Dashboard: 12 vistas × 6 anchos (320,375,390,430,1280,1440) × 2 temas sin desbordes; capturas revisadas. Se corrigió el margen heredado que desalineaba los paneles y el peso de etiquetas secundarias. El buscador móvil conserva 16 px para evitar ampliación automática de campos al enfocarlos en iPhone.
 Las suites también verifican 13 piezas editables, pago por pieza, asistente con confirmación, altas, avance parcial, errores externos y operación sin clave.
 Las pruebas usan contextos aislados y datos sintéticos. No se accede al perfil personal ni se borran datos reales.
 
