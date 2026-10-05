@@ -11,7 +11,7 @@ process.env.ASSISTANT_ALLOWED_ORIGINS=[process.env.ASSISTANT_ALLOWED_ORIGINS,'ht
 const {default:assistant}=await import('../api/assistant.mjs');
 const manifest=JSON.parse(await readFile(path.join(dist,'release-manifest.json'),'utf8'));
 const allowed=new Set([...Object.keys(manifest.files),'release-manifest.json']);
-const types={'.html':'text/html; charset=utf-8','.mjs':'application/javascript','.js':'application/javascript','.css':'text/css','.json':'application/json','.webmanifest':'application/manifest+json','.png':'image/png','.svg':'image/svg+xml'};
+const types={'.html':'text/html; charset=utf-8','.mjs':'application/javascript','.js':'application/javascript','.css':'text/css','.json':'application/json','.webmanifest':'application/manifest+json','.webp':'image/webp','.png':'image/png','.svg':'image/svg+xml'};
 const server=createServer(async(req,res)=>{
   try{
     const url=new URL(req.url,'http://localhost'),match=url.pathname.match(/^\/api\/assistant\/(session|interpret)$/);

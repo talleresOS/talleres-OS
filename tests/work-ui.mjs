@@ -47,7 +47,7 @@ try{
  await go('settings');await field('Garantía del taller').selectOption('6');await field('Condiciones de garantía').fill('Garantía de pintura');await button('Guardar garantía').click();await p.getByText('Guardado correctamente.',{exact:true}).waitFor();
  await p.waitForFunction(()=>!document.querySelector('[data-form="work-warranty"] button').disabled);
  await p.locator('#logo').setInputFiles(path.join(root,'icon-192.png'));await p.locator('.logo-preview').waitFor();await p.waitForFunction(()=>document.querySelectorAll('.palette-swatches span').length===5);
- await go('home');await p.locator('.home-logo').waitFor();assert.equal(await p.getByRole('heading',{name:'Tu taller, hoy'}).count(),1);
+ await go('home');await p.locator('.home-logo').waitFor();assert.equal(await p.getByRole('heading',{name:'Tu taller, en un solo lugar.'}).count(),1);
  await go(orderRoute);await button('Crear cotización').click();await field('Condiciones para el cliente').fill('Precio acordado en pesos dominicanos.');await button('Generar cotización').click();await p.locator('.receipt').waitFor();
  const quoteText=await p.locator('.receipt').innerText();assert.doesNotMatch(quoteText,/David|Francisco|Carlos|500\.00|1,200|2,000|ganancia/i);assert.match(quoteText,/6 meses/);
  const receiptPath=path.join(out,'quote-mobile.png');await p.screenshot({path:receiptPath,fullPage:true});

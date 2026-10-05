@@ -17,6 +17,6 @@ try{
  assert.equal((await post('secret',{},session.token)).status,404);
  const config=JSON.parse(await readFile(new URL('../vercel.json',import.meta.url)));assert.equal(config.outputDirectory,'dist');assert.ok(config.functions['api/assistant.mjs'].excludeFiles.includes('server/.env*'));
  const manifest=JSON.parse(await readFile(new URL('../dist/release-manifest.json',import.meta.url)));
- assert.equal(Object.keys(manifest.files).length,30);for(const name of Object.keys(manifest.files))assert.ok(!/server|api\/|\.env|test|TallerOS-backup/.test(name));
- console.log('PASS Adaptador Vercel: req.body procesado, origen de preview, sesión, interpretación, secretos excluidos y 30 archivos públicos. Despliegue remoto aún no verificado.');
+ assert.equal(Object.keys(manifest.files).length,32);for(const name of Object.keys(manifest.files))assert.ok(!/server|api\/|\.env|test|TallerOS-backup/.test(name));
+ console.log('PASS Adaptador Vercel: req.body procesado, origen de preview, sesión, interpretación, secretos excluidos y 32 archivos públicos. Despliegue remoto aún no verificado.');
 }finally{globalThis.fetch=nativeFetch;server.closeAllConnections();await new Promise(r=>server.close(r));}

@@ -11,7 +11,7 @@ export async function start({serviceWorkers='block'}={}){
   if(req.url==='/blank'){res.setHeader('content-type','text/html');res.end('<title>Test</title>');return;}
   const pathname=decodeURIComponent(new URL(req.url,'http://localhost').pathname);if(pathname.split('/').some(s=>s.startsWith('.')||s==='server'||s==='local-backups'))throw Error('private path');
   const file=path.resolve(root,pathname.replace(/^\/+/,'')||'index.html');if(!file.startsWith(root+path.sep))throw Error('path');
-  res.setHeader('content-type',({'.html':'text/html','.mjs':'application/javascript','.js':'application/javascript','.css':'text/css','.json':'application/json','.webmanifest':'application/manifest+json','.png':'image/png','.svg':'image/svg+xml'})[path.extname(file)]||'text/plain');
+  res.setHeader('content-type',({'.html':'text/html','.mjs':'application/javascript','.js':'application/javascript','.css':'text/css','.json':'application/json','.webmanifest':'application/manifest+json','.webp':'image/webp','.png':'image/png','.svg':'image/svg+xml'})[path.extname(file)]||'text/plain');
   res.end(await readFile(file));
  }catch{res.writeHead(404);res.end();}});
  await new Promise(r=>server.listen(0,'127.0.0.1',r));

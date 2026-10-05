@@ -1,3 +1,4 @@
+import {icon,navigation,createDashboard,searchResults} from './dashboard-ui.mjs';
 import {backupFilename} from './backup.mjs';
 import {createDocumentUI} from './document-ui.mjs';
 import {createAssistantUI} from './assistant-ui.mjs';
@@ -18,7 +19,7 @@ const field=(label,name,value='',type='text',extra='')=>'<label class="field"><s
 const textarea=(label,name,value='')=>'<label class="field full"><span>'+label+'</span><textarea name="'+name+'" rows="3">'+esc(value)+'</textarea></label>';
 const select=(label,name,options,value,extra='')=>'<label class="field"><span>'+label+'</span><select aria-label="'+esc(label)+'" name="'+name+'" '+extra+'>'+options.map(x=>{const [v,l]=Array.isArray(x)?x:[x,x];return '<option value="'+esc(v)+'" '+(String(v)===String(value)?'selected':'')+'>'+esc(l)+'</option>';}).join('')+'</select></label>';
 let d,route='home',id='',orderTab='work',formContext={},busy=false,selectedMonth=today().slice(0,7),pendingImport=null,previousFocus,pendingReception;
-const names={home:'Inicio',orders:'Órdenes',production:'Producción',clients:'Clientes',more:'Más',history:'Historial',employees:'Empleados',inventory:'Inventario',monthly:'Cierre mensual',settings:'Configuración',finance:'Finanzas',trash:'Papelera'};
+const names={home:'Inicio',orders:'Órdenes',production:'Producción',clients:'Clientes',more:'Más',history:'Historial',employees:'Empleados',inventory:'Inventario',monthly:'Cierre mensual',settings:'Configuración',finance:'Finanzas',vehicles:'Vehículos',payments:'Pagos',expenses:'Gastos',trash:'Papelera'};
 const client=o=>find(d,'clients',o.clientId)||{};
 const vehicle=o=>find(d,'vehicles',o.vehicleId)||{};
 const vehicleText=o=>{const v=vehicle(o);return [v.brand,v.model,v.year].filter(Boolean).join(' ')||'Vehículo sin referencia';};
@@ -52,11 +53,15 @@ function applyAppearance(){
 function toast(message){const t=document.querySelector('#toast');t.textContent=message;t.hidden=false;clearTimeout(toast.timer);toast.timer=setTimeout(()=>t.hidden=true,5000);}
 function navigate(target){dialog.close();if(location.hash==='#'+target)render();else location.hash=target;}
 function shell(title,body,action=''){
-  const sparse=(['home','orders','production'].includes(route)?d.orders.filter(active).length<4:route==='clients'&&d.clients.length<4)&&!body.includes('empty-state');
-  if(sparse)body+='<span class="workspace-watermark" aria-hidden="true">TallerOS</span>';
-  const nav=[['home','⌂','Inicio'],['orders','▤','Órdenes'],['production','◇','Producción'],['clients','♙','Clientes'],['more','•••','Más']];
-  const selected=route==='order'?'orders':route==='client'?'clients':names[route]&&!['history','employees','inventory','monthly','settings','finance','trash'].includes(route)?route:'more';
-  app.innerHTML='<aside class="sidebar"><a class="brand" href="#home">'+(d.settings[0]?.logoData?'<img class="brand-logo" src="'+esc(d.settings[0].logoData)+'" alt="Logo del taller">':'<span class="brand-mark">T</span>')+'<span>Taller<span class="gold">OS</span><small>'+esc(d.settings[0]?.name||'Mi taller')+'</small></span></a><nav>'+Object.entries(names).filter(([k])=>!['more','trash'].includes(k)).map(([k,l])=>'<a href="#'+k+'" class="'+(route===k?'on':'')+'">'+l+'</a>').join('')+'</nav><small class="version">Fase 2 · '+VERSION+'</small></aside><main><header class="top"><div>'+(route==='home'&&d.settings[0]?.logoData?'<img class="home-logo" src="'+esc(d.settings[0].logoData)+'" alt="'+esc(d.settings[0].name)+'">':'<p class="eyebrow">'+esc(d.settings[0]?.name||'Mi taller')+'</p>')+'<h1>'+esc(title)+'</h1></div>'+action+'</header>'+body+'</main><nav class="bottom" aria-label="Navegación principal">'+nav.map(([r,icon,label])=>'<a href="#'+r+'" class="'+(selected===r?'on':'')+'" '+(selected===r?'aria-current="page"':'')+'><span aria-hidden="true">'+icon+'</span>'+label+'</a>').join('')+'</nav>';
+  const s=d.settings[0],workshop=s?.name||'Mi taller',isHome=route==='home';
+  document.documentElement.dataset.view=route;
+  const selected=route==='order'?'orders':route==='client'?'clients':route==='employee'?'employees':route==='product'?'inventory':route;
+  const nav=[['home','Inicio'],['orders','Órdenes'],['production','Producción'],['clients','Clientes'],['more','Más']];
+  const navItem=([r,label])=>'<a href="#'+r+'" class="'+(selected===r?'on':'')+'" '+(selected===r?'aria-current="page"':'')+'>'+icon(r)+'<span>'+label+'</span></a>';
+  const logo=s?.logoData?'<img class="brand-logo" src="'+esc(s.logoData)+'" alt="Logo del taller">':'<span class="brand-mark">'+icon('vehicles')+'</span>';
+  const header=isHome?'<header class="top dashboard-hero"><div class="hero-copy"><p class="eyebrow">'+esc(workshop)+'</p><h1>Tu taller,<br><em>en un solo lugar.</em></h1><p class="hero-description">Gestiona clientes, órdenes, producción, pagos e inventario de forma simple y profesional.</p></div><div class="hero-date">'+icon('calendar')+'<span><strong>'+esc(new Intl.DateTimeFormat('es-DO',{weekday:'long'}).format(new Date()))+'</strong><small>'+esc(new Intl.DateTimeFormat('es-DO',{day:'numeric',month:'long',year:'numeric'}).format(new Date()))+'</small></span></div></header>':'<header class="top"><div><p class="eyebrow">'+esc(workshop)+'</p><h1>'+esc(title)+'</h1></div>'+action+'</header>';
+  app.innerHTML='<div class="workspace-scene" aria-hidden="true"></div><aside class="sidebar"><a class="brand" href="#home">'+logo+'<span class="brand-identity"><strong>'+esc(workshop)+'</strong><small>Tu taller, en un solo lugar</small></span></a><nav aria-label="Menú del taller">'+navigation.map(navItem).join('')+'</nav><a class="sidebar-footer" href="#settings"><span class="brand-mark">'+icon('vehicles')+'</span><span><strong>TallerOS</strong><small>v'+VERSION+'</small></span></a></aside><main><div class="workspace-toolbar"><div class="global-search"><label for="global-search">'+icon('search')+'<span class="sr-only">Buscar en todo el taller</span></label><input id="global-search" type="search" maxlength="120" placeholder="Buscar clientes, vehículos, órdenes…" autocomplete="off" aria-controls="global-results" aria-expanded="false"><div id="global-results" class="global-results" hidden></div></div><div class="toolbar-actions">'+button(icon('sun'),'theme-toggle','','icon theme-toggle')+'<a class="workshop-switch" href="#settings" aria-label="Configurar '+esc(workshop)+'">'+(s?.logoData?'<img class="home-logo" src="'+esc(s.logoData)+'" alt="'+esc(workshop)+'">':'<span class="workshop-avatar">'+esc(workshop.trim().charAt(0).toUpperCase())+'</span>')+'<span>'+esc(workshop)+'</span>'+icon('chevron')+'</a></div></div>'+header+body+'</main><nav class="bottom" aria-label="Navegación principal">'+nav.map(([r,label])=>'<a href="#'+r+'" class="'+(selected===r||r==='more'&&!nav.some(([k])=>k===selected)?'on':'')+'">'+icon(r)+'<span>'+label+'</span></a>').join('')+'</nav>';
+  document.querySelector('.theme-toggle')?.setAttribute('aria-label',appearance().theme==='dark'?'Cambiar a modo claro':'Cambiar a modo oscuro');
 }
 function orderCard(o,history=false){
   const f=financial(d,o),v=vehicle(o),c=client(o);
@@ -64,8 +69,14 @@ function orderCard(o,history=false){
 }
 function searchBar(placeholder='Buscar',history=false){return '<div class="filters"><label class="search-field"><span class="sr-only">'+placeholder+'</span><input type="search" id="search" placeholder="'+placeholder+'" data-filter></label>'+(history?field('Mes','historyMonth','','month','data-filter')+field('Año','historyYear','','number','min="2000" max="2100" step="1" data-filter')+field('Desde','historyStart','','date','data-filter')+field('Hasta','historyEnd','','date','data-filter'):'')+'</div>';}
 function home(){
-  const orders=d.orders.filter(active),attention=orders.filter(o=>finished(d,o)),production=orders.filter(o=>!finished(d,o)),m=monthly(d,today().slice(0,7));
-  shell('Tu taller, hoy','<div class="metrics">'+metric('Órdenes activas',orders.length)+metric('Terminados por entregar',attention.length)+metric('Por cobrar',money(sum(d.orders.filter(o=>!cancelled(o)&&o.status!=='Cotización'),o=>balance(d,o))))+metric('Ingresos del mes',money(m.cash))+'</div><section><div class="section-title"><h2>Necesitan atención</h2><span>'+attention.length+'</span></div><div class="cards">'+(attention.map(o=>orderCard(o)).join('')||empty('No hay trabajos terminados pendientes de entrega.'))+'</div></section><section><div class="section-title"><h2>En producción</h2><a href="#production">Ver producción</a></div><div class="cards">'+(production.map(o=>orderCard(o)).join('')||empty('No hay trabajos en producción.'))+'</div></section>',button('Nueva orden','order-new','','primary'));
+  shell('Tu taller, hoy',createDashboard({d,esc,money,date,button,empty,vehicleText,client}));
+}
+function vehiclesPage(){
+  shell('Vehículos',searchBar('Buscar marca, modelo, placa o cliente')+'<div class="cards">'+(d.vehicles.map(v=>'<article class="card searchable" data-search="'+esc([v.brand,v.model,v.plate,find(d,'clients',v.clientId)?.name].join(' ').toLowerCase())+'"><div class="order-preview"><span class="vehicle-emblem">'+icon('vehicles')+'</span><div><h3>'+esc(v.brand+' '+v.model)+'</h3><span>'+esc([v.year,v.color,v.plate].filter(Boolean).join(' · '))+'</span></div></div>'+row('Cliente','<a href="#client/'+v.clientId+'">'+esc(find(d,'clients',v.clientId)?.name||'Sin referencia')+'</a>')+'<div class="inline-actions">'+button('Editar vehículo','vehicle-edit',v.id,'quiet')+'<a class="btn quiet" href="#client/'+v.clientId+'">Ver historial</a></div></article>').join('')||empty('Los vehículos de tus clientes aparecerán aquí.'))+'</div>',button('Agregar vehículo','vehicle-new','','primary'));
+}
+function movementsPage(kind){
+  const isPay=kind==='payments',records=d[kind].filter(x=>!x.voided).slice().reverse(),orders=d.orders.filter(active);
+  shell(isPay?'Pagos':'Gastos',searchBar(isPay?'Buscar pago, orden o vehículo':'Buscar gasto, orden o vehículo')+'<p class="help">'+(isPay?'Consulta los abonos reales. Selecciona una orden para registrar un pago.':'Consulta los costos registrados. Cada gasto sigue vinculado a su orden.')+'</p><div class="cards">'+(records.map(x=>{const o=find(d,'orders',x.orderId);return '<article class="card searchable" data-search="'+esc([o?.number,o?vehicleText(o):'',x.description,x.method].join(' ').toLowerCase())+'"><div class="split"><h3>'+esc(isPay?x.method:x.description||x.concept)+'</h3><span class="movement-amount">'+money(x.amount)+'</span></div><p class="muted">'+esc(date(x.date))+'</p>'+(o?'<a class="movement-order" href="#order/'+o.id+'">'+esc(o.number+' · '+vehicleText(o))+icon('arrow')+'</a>':'<p>Referencia histórica no disponible</p>')+'</article>';}).join('')||empty(isPay?'Todavía no hay pagos registrados.':'Todavía no hay gastos registrados.'))+'</div>',button(isPay?'Registrar pago':'Nuevo gasto',isPay?'quick-pay':'quick-cost','','primary'));
 }
 function orderPage(){
   const o=find(d,'orders',id);if(!o)return shell('Orden',empty('Orden no encontrada.'));
@@ -180,13 +191,20 @@ async function render(){
   d=await service.state();applyAppearance();[route,id]=location.hash.slice(1).split('/');route ||= 'home';
   if(route==='home')home();else if(route==='orders')shell('Órdenes',searchBar('Buscar REV, cliente, vehículo o placa')+'<div class="cards">'+(d.orders.filter(active).map(o=>orderCard(o)).join('')||empty('No hay órdenes activas.'))+'</div>',button('Nueva orden','order-new','','primary'));
   else if(route==='order')orderPage();else if(route==='production')production();else if(route==='history')history();else if(route==='clients')clients();else if(route==='client')clientPage();else if(route==='employees')employees();else if(route==='employee')employeePage();else if(route==='inventory')inventory();else if(route==='product')productPage();else if(route==='monthly')monthPage();else if(route==='settings')settings();
+  else if(route==='vehicles')vehiclesPage();else if(route==='payments'||route==='expenses')movementsPage(route==='payments'?'payments':'costs');
   else if(route==='finance')shell('Finanzas','<p class="help">Precio acordado, dinero cobrado y costos se consultan en una única vista de rentabilidad dentro de cada orden.</p><div class="cards">'+d.orders.filter(o=>!trashed(o)).map(o=>orderCard(o,closed(o))).join('')+'</div>');
   else if(route==='trash')shell('Papelera','<div class="cards">'+(d.orders.filter(trashed).map(o=>'<article class="card"><h3>'+esc(o.number)+'</h3><p>'+esc(vehicleText(o))+'</p>'+button('Ver detalle conservado','open-order',o.id)+button('Restaurar','order-restore',o.id)+'</article>').join('')||empty('No hay órdenes en papelera.'))+'</div>');
-  else shell('Más','<div class="more-grid">'+['history','employees','inventory','monthly','finance','settings','trash'].map(r=>'<a class="card card-link" href="#'+r+'"><h2>'+names[r]+'</h2></a>').join('')+'</div>');
+  else shell('Más','<div class="more-grid">'+['vehicles','payments','expenses','history','employees','inventory','monthly','finance','settings','trash'].map(r=>'<a class="card card-link" href="#'+r+'"><h2>'+names[r]+'</h2></a>').join('')+'</div>');
   if(pendingReception&&route==='order'&&String(pendingReception.orderId)===String(id)){documentUI.show(pendingReception);pendingReception=null;}
 }
 function download(name,content,type='application/json'){const url=URL.createObjectURL(new Blob([content],{type})),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),5000);}
 async function handleAction(action,target){
+  if(action==='theme-toggle'){await service.settings({appearance:{...d.settings[0]?.appearance,...appearance(),theme:appearance().theme==='dark'?'light':'dark'}});await render();return;}
+  if(action==='quick-pay'||action==='quick-cost'){
+    const items=d.orders.filter(active).filter(o=>action==='quick-cost'||balance(d,o)>0);
+    openDialog(action==='quick-pay'?'Registrar pago · Selecciona la orden':'Nuevo gasto · Selecciona la orden','<div class="menu-list">'+(items.map(o=>button('<strong>'+esc(o.number)+'</strong> '+esc(vehicleText(o))+'<small>'+money(balance(d,o))+' pendiente</small>',action==='quick-pay'?'pay':'cost-new',o.id)).join('')||empty(action==='quick-pay'?'No hay órdenes activas con saldo pendiente.':'Crea una orden para asociar sus costos.'))+'</div>');return;
+  }
+
   if(action==='palette-auto'){await ensureLogo(true);await render();toast('Paleta del logo aplicada.');return;}
   if(await documentUI.handleAction(action,target))return;
   if(await workUI.handleAction(action,target))return;
@@ -286,13 +304,25 @@ document.addEventListener('submit',async event=>{
   finally{busy=false;if(submit?.isConnected)submit.disabled=false;}
 });
 document.addEventListener('input',event=>{
+  if(event.target.id==='global-search'){
+    const term=event.target.value.trim(),box=document.querySelector('#global-results');
+    box.hidden=!term;event.target.setAttribute('aria-expanded',String(!!term));
+    box.innerHTML=term?(searchResults(d,term).map(x=>'<a href="#'+esc(x.href)+'">'+icon(x.icon)+'<span><strong>'+esc(x.title)+'</strong><small>'+esc(x.detail)+'</small></span>'+icon('arrow')+'</a>').join('')||'<p>No se encontraron coincidencias.</p>'):'';
+  }
+
   if(event.target.matches('[data-filter]'))filterCards();
   if(event.target.matches('[data-piece-search]')){
     const term=event.target.value.toLocaleLowerCase();event.target.closest('form').querySelectorAll('.piece-choice').forEach(el=>el.hidden=!el.textContent.toLocaleLowerCase().includes(term));
   }
   if(event.target.closest('[data-form="work-assignment"],[data-form="order-pieces"]'))workUI.updatePicker();
 });
+document.addEventListener('keydown',event=>{
+  if(event.target.id==='global-search'&&event.key==='Escape'){event.target.value='';document.querySelector('#global-results').hidden=true;event.target.setAttribute('aria-expanded','false');}
+  if(event.target.id==='global-search'&&event.key==='ArrowDown'){event.preventDefault();document.querySelector('#global-results a')?.focus();}
+});
+document.addEventListener('click',event=>{if(!event.target.closest('.global-search')){const box=document.querySelector('#global-results');if(box)box.hidden=true;document.querySelector('#global-search')?.setAttribute('aria-expanded','false');}});
 document.addEventListener('change',async event=>{
+
   const target=event.target;
   try{
     if(target.name==='receptionPieceName'&&documentUI.isFullPaint(target.value))documentUI.expandFullPaint();

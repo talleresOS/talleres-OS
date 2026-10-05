@@ -1,3 +1,7 @@
+# 3.0.0 · Visual refresh · 2026-10-05
+
+Dashboard con datos reales, fotografía integrada, navegación y superficies coherentes en escritorio/móvil. Sin cambios de esquema ni lógica operativa. Ver docs/VISUAL-3.0.0.md.
+
 # 3.0.0 — publicación GitHub Pages · 2026-10-05
 
 - Publicada en la misma URL; commit main 935a4da, despliegue Pages 37308159560 exitoso.

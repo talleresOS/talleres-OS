@@ -1,3 +1,7 @@
+# Actualización visual en verificación — 05/10/2026
+
+Build 3.0.0-visual-20261005 en rama codex/visual-3-0. 20 suites + runtime/build aprobados. Ver docs/VISUAL-3.0.0.md. No repetir piezas/asistente ya implementados. La publicación autorizada conserva la URL y el esquema 3.
+
 # Estado vigente — 05/10/2026
 
 TallerOS 3.0.0 publicado y verificado en la URL GitHub Pages existente. main: 935a4dad49339761691f4057722fc92092f20d12; fuente funcional probada: 43dfb6ed30d61455911f6d1c960002ec75012f5d en codex/independence-3-0. Ver la sección final de docs/INDEPENDENCE-3.0.0.md.

@@ -1,6 +1,7 @@
 # TallerOS — reglas de continuidad (Independence Release)
 
 ## Proyecto y alcance
+- Trabajo actual: codex/visual-3-0; consultar docs/VISUAL-3.0.0.md y el encabezado más reciente de CONTINUIDAD.md. dashboard-ui.mjs es presentación de solo lectura; --workshop-image permite cambiar el fondo.
 - Repositorio maestro: https://github.com/talleresOS/talleres-OS.
 - Producción: https://talleresos.github.io/talleres-OS/index.html, main 3.0.0 publicada y verificada el 05/10/2026; commit 935a4dad49339761691f4057722fc92092f20d12.
 - Código completo 3.0.0 en rama codex/independence-3-0; main mantiene la distribución estática existente. Leer CONTINUIDAD.md y docs/INDEPENDENCE-3.0.0.md antes de actuar. Los informes 2.x son antecedentes.
@@ -55,7 +56,7 @@
 - npm run dev (no necesita Codex ni API key).
 - npm run build; npm run check:release; npm test; npm run test:runtime.
 - TALLEROS_BROWSER opcional para un ejecutable instalado; TALLEROS_PLAYWRIGHT opcional, no requisito. TALLEROS_TEST_OUTPUT dentro de .test-results.
-- 19 suites actuales + runtime; las migraciones usan tests/fixtures con SHA-256, no tags Git. ui-refresh/ui-upgrade son archivos históricos 2.2, fuera de la suite vigente.
+- 20 suites actuales + runtime; las migraciones usan tests/fixtures con SHA-256, no tags Git. ui-refresh/ui-upgrade son archivos históricos 2.2, fuera de la suite vigente.
 - Modificar la raíz y regenerar dist; nunca editar ambas copias a mano. Solo dist es público.
 - No imprimir/cargar archivos secretos en auditorías. Escanear listas explícitas de código público y metadatos, sin mostrar valores.
 

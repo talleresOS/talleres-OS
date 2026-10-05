@@ -1,3 +1,7 @@
+# Actualización visual
+
+Rama codex/visual-3-0, build 3.0.0-visual-20261005; ver docs/VISUAL-3.0.0.md para publicación verificada.
+
 # Ubicación y versiones
 
 - Código maestro: https://github.com/talleresOS/talleres-OS
