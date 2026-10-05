@@ -110,7 +110,7 @@ Sin nueva migración ni stores en esta continuación. Se reutiliza el esquema 3,
 
 Archivos de esta continuación: work-service.mjs, work-ui.mjs, service.mjs, document-ui.mjs, app.js, assistant-contract.mjs, assistant-core.mjs, assistant-service.mjs, assistant-ui.mjs, server/openai-provider.mjs; las pruebas nuevas assignment-consolidation.mjs y assistant-intake.mjs; ajustes de assistant-server, assistant-safety, assistant-ui, work-migration, documents-upgrade y update-notice; package.json, version.json, sw.js, documentación y dist regenerado.
 
-Pendiente: conectar Vercel (plugin todavía no instalado/conectado al comprobar), transferir secretos por canal privado, habilitar saldo del proyecto OpenAI, comprobar interpretación real, publicar un preview y verificarlo en iPhone/Safari con micrófono real. La credencial existente tiene duración limitada; verificar vigencia antes de desplegar. No hay URL Vercel verificada ni cambio en main/producción.
+Pendiente: conectar Vercel (plugin todavía no instalado/conectado al comprobar), transferir secretos por canal privado, habilitar saldo del proyecto OpenAI, comprobar interpretación real, publicar un preview y verificarlo en iPhone/Safari con micrófono real. La credencial existente tiene duración limitada; verificar vigencia antes de desplegar. No hay URL Vercel verificada ni cambio en main/producción. Código del piloto guardado y comprobado en [codex/assistant-vercel-2-5-0](https://github.com/talleresOS/talleres-OS/tree/codex/assistant-vercel-2-5-0), commit 3fd59f77d9ba926941345a67e53533b5d584dc69. Verificados los 29 hashes públicos contra lo probado; cero archivos privados en la rama.
 
 ## Archivos de esta etapa
 

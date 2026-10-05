@@ -1,3 +1,18 @@
+# 3.0.0 — publicación GitHub Pages · 2026-10-05
+
+- Publicada en la misma URL; commit main 935a4da, despliegue Pages 37308159560 exitoso.
+- 30 hashes verificados y flujo completo móvil/offline sobre la URL real, sin errores JS.
+- Sin nuevas funciones ni rediseño adicional al retomar; datos/esquema/origen preservados.
+- Backend/IA real pendientes; consultas locales y operación normal disponibles.
+
+# 3.0.0 — Independence Release · 2026-10-04 (rama, sin publicación)
+
+- Respaldos completos versionados con integridad, resumen previo, restauración confirmada y recuperación anterior.
+- Errores IA seguros, límites configurables, timeout y deduplicación; aplicación operativa sin API.
+- Runtime Node independiente, build verificable y pruebas históricas reproducibles sin tags locales.
+- Documentación de arquitectura, datos, despliegue, respaldo y recuperación; ejemplos de entorno vacíos.
+- 19 suites más runtime aprobadas; esquema 3 y producción 2.4.1 conservados. Vercel/IA real pendientes de acceso externo.
+
 # 2.5.0 piloto — continuación 2026-10-04 (publicación pendiente)
 
 - Pintura completa editable antes de guardar; asignación parcial conserva los trabajos restantes.

@@ -1,69 +1,88 @@
-# TallerOS
+# TallerOS 3.0 — Independence Release
 
-Aplicación existente de gestión de taller, ampliada sobre 2.2.0 sin reconstruirla.
+Gestión de un taller de carrocería y pintura: clientes, vehículos, órdenes, piezas, procesos, empleados, cobros, costos, inventario, documentos y cierres. Esta versión consolida el proyecto existente; no lo reconstruye.
 
-- Código local: **2.5.0 piloto** sobre 2.4.1. Pintura completa 13 piezas, asistente con acciones controladas e interfaz renovada.
-- Publicada: **2.4.1**, intacta. Vercel preparado; conexión/despliegue y OpenAI real pendientes.
-- Informe actual: `docs/ASISTENTE-2.5.0.md`.
-- URL existente: https://talleresos.github.io/talleres-OS/index.html
-- Repositorio: https://github.com/talleresOS/talleres-OS
-- Auditoría final y autorización de publicación: `docs/AUDITORIA-2.4.1.md`.
-- Informes: `docs/COMPROBANTES-2.4.0.md` y `docs/FASE2-2.3.0.md`. Punto de continuación: `CONTINUIDAD.md`.
+**Estado:** 3.0.0 publicada el 05/10/2026; código completo en `codex/independence-3-0`. Producción en GitHub Pages, [misma URL](https://talleresos.github.io/talleres-OS/index.html). Vercel está preparado, no desplegado/verificado. La última llamada real a OpenAI fue rechazada por saldo API agotado; las pruebas posteriores usan proveedores simulados. No confundir estas pruebas con una validación de IA real.
 
-## Datos y migración
+TallerOS funciona sin ChatGPT Plus, Codex ni OpenAI. La IA es opcional; necesita un backend y una cuenta API con saldo. GitHub guarda código, **no los datos de tu taller**.
 
-Cada navegador conserva sus datos en IndexedDB; GitHub publica el programa, no los datos del taller. No existe sincronización cloud.
+## Instalar desde GitHub
 
-La base `talleros2` pasa del esquema 2 al 3 mediante ampliación aditiva. Se incorporan `vehiclePieces`, `workAssignments` y `quotations`. Antes de transformar el modelo se guarda la instantánea `before-work-model-v3`. Configuración permite descargar esa copia previa a 2.3; exportar todos los datos genera un backup completo formato 3. La importación admite formatos anteriores con validación y recuperación previa.
+Requisitos de desarrollo: Git, Node.js 24 (incluye npm) y acceso a npm para instalar las herramientas de prueba. No se necesita una herramienta de OpenAI.
 
-Se conservan IDs, números REV, clientes, vehículos, órdenes, piezas antiguas, costos, cuentas, devengos, pagos, movimientos, documentos y campos desconocidos. La migración es transaccional e idempotente. No borra la base ni el libro auxiliar histórico `talleros2-ledger`.
+```sh
+git clone --branch codex/independence-3-0 https://github.com/talleresOS/talleres-OS.git
+cd talleres-OS
+npx --yes pnpm@11.25.0 install --frozen-lockfile
+npx --yes pnpm@11.25.0 exec playwright install chromium
+npm run dev
+```
 
-Una asignación antigua que solo decía cantidad 5 aparece como **5 piezas sin especificar**. No se inventan nombres ni procesos históricos. El propietario puede identificar las piezas manteniendo los importes protegidos. Las asignaciones históricas o ya devengadas no permiten cambiar silenciosamente empleado, cantidad, tarifa o total.
+Abrir http://localhost:4173. El servidor local genera y sirve únicamente `dist`; no sirve los archivos privados. Sin IA no hace falta crear ningún archivo de entorno. Para operar localmente con Node y generar el build tampoco se necesitan dependencias externas: `node scripts/dev.mjs` funciona sin instalar Playwright. Este último solo se utiliza para pruebas.
 
-No abrir directamente una versión de código que solicite un esquema inferior después de migrar. Un ZIP del código no es una copia de los datos del navegador; la recuperación de datos debe usar backups y código compatible, nunca borrar IndexedDB.
+En Linux, Playwright puede requerir `npx --yes pnpm@11.25.0 exec playwright install --with-deps chromium`. Se puede elegir un navegador instalado mediante `TALLEROS_BROWSER`; no es obligatorio utilizar Edge. `TALLEROS_TEST_OUTPUT` permite cambiar la carpeta de evidencias dentro de `.test-results`. Las pruebas crean datos sintéticos en contextos separados y nunca abren el perfil personal.
 
-## Piezas, procesos y empleados
+## Comandos
 
-1. En la orden se eligen las piezas físicas: catálogo táctil, búsqueda, carro completo o pieza personalizada.
-2. Cada trabajo elige proceso, empleado y su propia selección de piezas.
-3. Por pieza: cantidad seleccionada × tarifa. Monto fijo: el importe acordado sin multiplicarlo.
-4. Cada trabajo tiene estado Pendiente, En proceso o Terminado. Terminar un proceso no termina los demás.
-5. Terminar devenga; pagar al empleado es una operación independiente. Reabrir, retirar y restaurar no repite devengos ni pagos.
+| Comando | Función |
+| --- | --- |
+| `npm run dev` / `npm start` | App y endpoint local, puerto 4173 |
+| `npm test` | 19 suites de modelo, UI, migración, finanzas, documentos, IA y respaldos |
+| `npm run test:runtime` | Copia sin Git/dependencias/secretos y aislamiento del servidor |
+| `npm run build` | Copia permitida de 30 recursos públicos a dist |
+| `npm run check:release` | Versiones, hashes, lista pública, caché y ausencia de secretos públicos |
+| `npm run start:assistant` | API sola, por defecto 127.0.0.1:8787 |
 
-Pintura completa siempre representa las 13 piezas estándar y se puede elegir con un toque.
+Antes de `npm test`, ejecutar `npm run build`. Las migraciones usan fixtures del código histórico incluidas en el repositorio: no requieren tags locales ni historial completo. `tests/ui-refresh.mjs` y `tests/ui-upgrade.mjs` son pruebas archivadas de 2.2.0 y no forman parte de la suite actual.
 
-Carro completo utiliza una lista configurable en Ajustes, inicialmente de 13 piezas. Quitar una usa 12; cambiar la configuración cambia la selección inicial, no las órdenes existentes.
+## Arquitectura y estructura
 
-Una pieza retirada deja de estar activa. Para retirar una pieza vinculada, primero hay que quitarla de sus trabajos editables o retirar esos trabajos. Se preservan la trazabilidad y los importes devengados. Producción y Empleados reutilizan los mismos trabajos, sin un responsable duplicado.
+HTML, CSS y módulos JavaScript nativos; sin framework ni dependencias de producción. IndexedDB es la fuente local de datos. Node 24 sirve el backend opcional, también adaptable a Vercel Functions.
 
-## Cotización, garantía y entrega
+| Archivos | Responsabilidad |
+| --- | --- |
+| app.js, work-ui.mjs, styles.css, interface.css | Navegación, formularios y presentación |
+| domain.mjs, work-model.mjs | Cálculos y relaciones; piezas físicas y procesos independientes |
+| service.mjs, work-service.mjs | Escrituras validadas, transaccionales e idempotentes |
+| storage.mjs, backup.mjs | IndexedDB, migraciones, respaldo/restauración e integridad |
+| documents*.mjs, document-ui.mjs | Comprobante inicial, cotización y factura final |
+| assistant-*.mjs | Contrato, consultas locales, confirmaciones, interfaz y voz |
+| server/*.mjs, api/assistant.mjs | Proveedor OpenAI, autenticación y endpoint privado |
+| pwa.js, sw.js, version.json | Instalación, funcionamiento sin conexión y actualización |
+| scripts/, tests/, .github/workflows/verify.yml | Desarrollo independiente y verificación sin despliegue |
 
-La cotización toma una copia de cliente, vehículo, logo, piezas, procesos, precio, condiciones y garantía. Confirmar el precio registra el acuerdo; las revisiones conservan historial. Un cambio de precio posterior exige volver a confirmar el acuerdo antes de entregar.
+Más detalle en [Arquitectura](docs/ARCHITECTURE.md) y [Modelo de datos](docs/DATA-MODEL.md).
 
-La garantía es configurable: ninguna, 3, 6, 12 meses o personalizada. Si no se configura, no se inventa. Cambiar la garantía general no cambia cotizaciones ni acuerdos anteriores.
+## Datos, respaldos y recuperación
 
-Documentos del cliente excluyen salarios, costos, rentabilidad y notas internas. Pueden visualizarse, imprimirse/guardarse como PDF con el navegador, descargarse como HTML autocontenido y compartirse cuando Web Share está disponible. WhatsApp prepara el mensaje y permite descargar el documento: no afirma haber adjuntado un archivo automáticamente.
+La base es `talleros2`, **esquema 3**. 3.0.0 es la versión de la aplicación; no supone un nuevo esquema. Cada navegador/origen conserva sus propios datos. No hay sincronización en la nube. El almacenamiento privado, borrar datos del navegador, perder el dispositivo o cambiar de origen puede hacer inaccesibles los datos.
 
-Trabajos terminados → cobrar saldo → revisar entrega → confirmar. Saldo cero por sí solo no entrega el vehículo. La constancia conserva garantía y fecha real de entrega, e incluye nombre, firma física y fecha. La orden pasa a Historial y queda bloqueada, con reapertura controlada.
+En **Configuración → Respaldos → Exportar respaldo** descargar y conservar fuera del navegador el JSON completo. En **Restaurar respaldo** seleccionar el archivo: TallerOS valida integridad, versión, registros y relaciones, muestra los recuentos y solo escribe después de pulsar **Restaurar y reemplazar**. Cancelar no cambia nada. Se conserva una instantánea del estado anterior para exportarla desde esa misma sección.
 
-## Apariencia y operación conservada
+Respaldar diariamente y después de cobros importantes. El JSON contiene información privada y no está cifrado: conservarlo en una ubicación privada con otra copia externa. GitHub y un ZIP de código no sustituyen este respaldo. [Guía de respaldos](docs/BACKUP-RESTORE.md) · [Recuperación si falla TallerOS](docs/RECOVERY.md).
 
-Logo en Inicio y documentos; paleta automática de hasta cinco colores útiles, con alternativa predeterminada y controles manuales avanzados. Temas claro/oscuro persistentes, contraste y profundidad sutil. Se mantiene “Tu taller, hoy”.
+## OpenAI opcional
 
-Inventario, clientes, vehículos, cobros, cuentas de empleados, materiales, otros costos, rentabilidad y cierre mensual siguen en la aplicación existente. Venta, caja cobrada y saldo pendiente permanecen separados. Los cierres mensuales guardan instantáneas históricas; pagar mano de obra no vuelve a restar su costo.
+El navegador llama al backend; solo el backend conoce `OPENAI_API_KEY`. No usar variables con prefijos públicos ni guardar secretos en Configuración/IndexedDB. Para desarrollo, copiar `server/.env.example` a `server/.env.local` y completar privadamente los valores. Los ejemplos contienen únicamente nombres vacíos.
 
-## Desarrollo
+Variables del servidor: `OPENAI_API_KEY`, `OPENAI_MODEL`, `ASSISTANT_ACCESS_CODE`, `ASSISTANT_ALLOWED_ORIGINS`, `ASSISTANT_ENABLED`, `ASSISTANT_DAILY_LIMIT`, `ASSISTANT_MINUTE_LIMIT`, `ASSISTANT_MAX_CONCURRENT`. El código de acceso debe ser largo y privado; no es la clave de OpenAI. El usuario lo introduce en Conectar del asistente; la sesión temporal permanece en memoria.
 
-- `domain.mjs`: cálculos, estados y datos permitidos en documentos.
-- `storage.mjs`: IndexedDB, migraciones y copias.
-- `service.mjs` y `work-service.mjs`: operaciones transaccionales.
-- `work-model.mjs`: catálogo, relaciones y compatibilidad histórica.
-- `app.js`, `work-ui.mjs`, `styles.css`: interfaz existente y flujos nuevos.
-- `logo-palette.mjs`: análisis local del logo.
-- `pwa.js`, `sw.js`: instalación y caché versionada; la actualización espera el cierre de las pestañas antiguas.
+Las consultas rápidas funcionan con datos locales. La interpretación libre usa Responses API, modelo predeterminado `gpt-4.1-mini`, configurable. Cada modificación se valida y confirma en TallerOS. La voz usa el reconocimiento del navegador si existe; siempre se puede escribir o dictar con el teclado.
 
-`npm run build` prepara 19 archivos públicos en `dist`, con hashes. No publica. No editar `dist` directamente.
+No hay llamadas automáticas al abrir la app ni reintentos automáticos. La API y el alojamiento pueden tener costos independientes; no se ha contratado ni pagado ningún servicio. [Seguridad, límites y capacidades](docs/AI-ASSISTANT.md).
 
-`npm test` ejecuta modelo, interfaz, migración desde el código exacto del tag `v2.2.0`, regresiones y casos extremos. Requiere Playwright y Edge/Chromium. Variables opcionales: `TALLEROS_PLAYWRIGHT`, `TALLEROS_BROWSER`, `TALLEROS_TEST_OUTPUT` (usar `.test-results` dentro del proyecto). La prueba adicional de actualización desde el MVP usa la opción documentada en `tests/edge-cases.mjs`.
+## Build y despliegue
 
-Las pruebas usan datos sintéticos, perfiles aislados y tamaños 360/390/430/1280. No equivalen a haber inspeccionado la base privada del teléfono ni a una prueba en Safari/iPhone físico. Ver resultados y límites en el informe.
+`npm run build && npm run check:release` no publica. Solo los 30 recursos de `dist` y su manifiesto son públicos. Nunca copiar toda la raíz a un servidor estático.
+
+Vercel usa `vercel.json`: build Node, salida dist y función /api/assistant. Las claves se configuran como secretos en Vercel. GitHub Pages ya publica el build 3.0 autorizado. Para Vercel, preparar primero un **Preview** de la rama de código completo y verificarlo; **no cambiar dominio ni la URL existente**. Cambiar de origen no mueve IndexedDB: requiere respaldo/importación explícita. [Pasos de despliegue](docs/DEPLOYMENT.md).
+
+## Límites conocidos
+
+- GitHub Pages 3.0.0 está publicado y verificado. No hay despliegue Vercel confirmado, prueba real satisfactoria de IA ni prueba en iPhone físico.
+- Los límites de API y la deduplicación del backend son por instancia; no constituyen un presupuesto global garantizado.
+- La voz depende del navegador, permisos y posiblemente su proveedor de reconocimiento.
+- Las pruebas cubren tamaños móviles equivalentes, no reemplazan Safari físico, teclado real ni impresora.
+- Los respaldos antiguos sin hash se aceptan con aviso; un hash detecta cambios, no autentica al autor.
+- No hay portal independiente de empleados, permisos multiusuario avanzados ni sincronización.
+- El informe de consolidación y la continuidad están en [INDEPENDENCE-3.0.0](docs/INDEPENDENCE-3.0.0.md) y [CONTINUIDAD](CONTINUIDAD.md).

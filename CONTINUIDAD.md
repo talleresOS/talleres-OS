@@ -1,8 +1,34 @@
+# Estado vigente — 05/10/2026
+
+TallerOS 3.0.0 publicado y verificado en la URL GitHub Pages existente. main: 935a4dad49339761691f4057722fc92092f20d12; fuente funcional probada: 43dfb6ed30d61455911f6d1c960002ec75012f5d en codex/independence-3-0. Ver la sección final de docs/INDEPENDENCE-3.0.0.md.
+
+La instrucción del 05/10 autorizó la publicación y sustituye las restricciones históricas de no actualizar main. Solo se publicaron los recursos públicos; ninguna clave ni datos reales. El siguiente paso es que el propietario pruebe esta versión en su iPhone, antes de otro rediseño. Vercel/IA conversacional real siguen pendientes de acceso/saldo externos.
+
+No repetir pruebas ni implementación ya concluidas sin cambios o un fallo que lo justifique. No reconstruir, no borrar IndexedDB, no cambiar URL.
+
+Los apartados siguientes son antecedentes.
+
+---
+
+# Continuar TallerOS 3.0 — Independence Release · 2026-10-04
+
+Estado vigente: build 3.0.0-independence-20261004, IndexedDB esquema 3 sin migración nueva. Rama GitHub codex/independence-3-0. Producción main 2.4.1 y URL intactas. Leer docs/INDEPENDENCE-3.0.0.md, README y AGENTS antes de modificar.
+
+Ya pasaron 19 suites más runtime independiente y verificación del build. Respaldos con SHA-256/resumen/confirmación/recuperación; IA robusta opcional; documentación y herramientas independientes. No repetir implementación ni reconstruir.
+
+Pendientes externos: conectar cuenta Vercel y desplegar/verificar Preview; configurar privadamente secretos; resolver saldo/vigencia OpenAI para prueba real; iPhone físico. No promover producción ni cambiar URL. La IA real no está certificada por los mocks.
+
+Nota Git local: metadatos heredados antiguos (HEAD 2.3.0 y origin local) no representan el GitHub actual. No resetear ni publicar main desde ese checkout. Los commits de esta entrega se crean en la rama remota; el informe registra su verificación.
+
+Los apartados siguientes son antecedentes históricos, no sustituyen este estado.
+
+---
+
 # Continuar TallerOS — 2026-10-04
 
 Estado actual: **2.5.0 piloto local**, build `2.5.0-assistant-pilot-20261004`; basado en la versión publicada 2.4.1. Leer `docs/ASISTENTE-2.5.0.md`. Diecisiete suites locales aprobadas; resultado final en .test-results/resume-25/suite-results.json. Pendiente conectar Vercel y verificar IA/despliegue real: OpenAI ya responde, pero rechaza por saldo agotado (429 credit_balance_exhausted / insufficient_quota). No afirmar que IA real o Vercel están operativos.
 
-El usuario autorizó explícitamente aplicación y backend en Vercel, conectados al repositorio actual, conservando GitHub Pages y sus datos hasta verificar el nuevo despliegue. Preparar/verificar rama codex/assistant-vercel-2-5-0; no actualizar main ni cambiar URL todavía. El origen nuevo requiere exportar/importar IndexedDB; no hay sincronización cloud. No implementar Modo Empleados ni apps nativas todavía.
+El usuario autorizó explícitamente aplicación y backend en Vercel, conectados al repositorio actual, conservando GitHub Pages y sus datos hasta verificar el nuevo despliegue. Rama codex/assistant-vercel-2-5-0 ya creada y verificada: commit 3fd59f77d9ba926941345a67e53533b5d584dc69, 29 hashes públicos coincidentes y cero archivos privados; no actualizar main ni cambiar URL todavía. El origen nuevo requiere exportar/importar IndexedDB; no hay sincronización cloud. No implementar Modo Empleados ni apps nativas todavía.
 
 Credencial creada mediante flujo seguro con vigencia de 30 días; existe SOLO en `server/.env.local`, ignorada en Git/Vercel/build. No leerla en respuestas, herramientas con salida visible ni copiarla al frontend. Debe transferirse al gestor de secretos de Vercel por un canal privado. `server/.env.example` no contiene secretos.
 
