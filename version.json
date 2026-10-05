@@ -1,13 +1,15 @@
 {
   "name": "TallerOS",
-  "version": "2.4.1",
+  "version": "3.0.0",
   "phase": 2,
-  "date": "2026-10-02",
+  "date": "2026-10-04",
   "baseCommit": "383c790",
   "canonicalUrl": "https://talleresos.github.io/talleres-OS/index.html",
   "database": {
     "name": "talleros2",
     "version": 3
   },
-  "build": "2.4.1-audit-20261002"
+  "build": "3.0.0-independence-20261004",
+  "productionBaseCommit": "c01491d190d72d9d4971d4b27f24146dac85386d",
+  "release": "Independence Release"
 }

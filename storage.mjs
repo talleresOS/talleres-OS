@@ -1,5 +1,6 @@
 import {MAIN,STORES,normalize,uid,VERSION} from './domain.mjs';
-import {migrateWorkModel,WORK_STATES} from './work-model.mjs';
+import {migrateWorkModel,migrateFullPaint,WORK_STATES} from './work-model.mjs';
+import {backupPayload,sealBackup,verifyBackup,validateBackupData,backupOverview} from './backup.mjs';
 const req = r => new Promise((resolve,reject)=>{r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
 const done = tx => new Promise((resolve,reject)=>{tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error||Error('No se guardaron los cambios.'));tx.onabort=()=>reject(tx.error||Error('Operación cancelada.'));});
 export class Storage {
@@ -49,12 +50,13 @@ export class Storage {
   async migrate(){
     const legacy=await this.legacy();
     return this.transact(d=>{
-      if(d.meta.some(x=>x.id==='phase2')){const changed=migrateWorkModel(d);this.backupBeforeDocuments(d);return changed;}
+      if(d.meta.some(x=>x.id==='phase2')){const changed=migrateWorkModel(d);this.backupBeforeDocuments(d);return migrateFullPaint(d)||changed;}
       const before={main:Object.fromEntries(MAIN.map(s=>[s,structuredClone(d[s])])),ledger:structuredClone(legacy)};
       d.snapshots.push({id:'before-phase2',workshopId:1,createdAt:new Date().toISOString(),reason:'Recuperación anterior a Fase 2',payload:before});
       normalize(d,legacy);
       migrateWorkModel(d);
       this.backupBeforeDocuments(d);
+      migrateFullPaint(d);
       return true;
     });
   }
@@ -65,7 +67,16 @@ export class Storage {
   }
   async export(){
     const d=await this.read();
-    return {format:'TallerOS-backup',version:3,appVersion:VERSION,workshopId:1,exportedAt:new Date().toISOString(),main:Object.fromEntries(MAIN.map(s=>[s,d[s]])),ledger:{accounts:d.ledgerAccounts,accruals:d.ledgerAccruals,payments:d.ledgerPayments},phase2:Object.fromEntries(STORES.filter(s=>!MAIN.includes(s)&&!s.startsWith('ledger')).map(s=>[s,d[s]]))};
+    return sealBackup(backupPayload(d));
+  }
+  async previewImport(payload){
+    const verified=await verifyBackup(payload),input=this.validate(payload),current=await this.read();
+    return {...backupOverview(input),verified,appVersion:payload.appVersion||'No registrada',schemaVersion:Number(payload.version),exportedAt:payload.exportedAt||null,currentCounts:backupOverview(current).counts,expectedState:JSON.stringify(current)};
+  }
+  async previousImportBackup(){
+    const d=await this.read(),snapshot=d.snapshots.filter(s=>String(s.id).startsWith('before-import-')).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)))[0];
+    if(!snapshot)throw Error('No hay una recuperación anterior a una restauración.');
+    return sealBackup(backupPayload({...snapshot.payload,snapshots:[]},{recoveryCreatedAt:snapshot.createdAt}));
   }
   async previousModelBackup(){
     const d=await this.read(),snapshot=d.snapshots.find(s=>s.id==='before-work-model-v3');
@@ -84,9 +95,9 @@ export class Storage {
       if(!Array.isArray(out[s]))throw Error('Falta la colección '+s+'.');
       const seen=new Set();
       for(const row of out[s]){
-        if(!row||row.id===undefined||Number(row.workshopId)!==1||seen.has(row.id))throw Error('Registro inválido o repetido en '+s+'.');
+        if(!row||Array.isArray(row)||row.id===undefined||Number(row.workshopId)!==1||seen.has(String(row.id)))throw Error('Registro inválido o repetido en '+s+'.');
         if(MAIN.includes(s)&&(!Number.isSafeInteger(row.id)||row.id<=0))throw Error('Clave inválida en '+s+'.');
-        seen.add(row.id);
+        seen.add(String(row.id));
       }
     }
     for(const invoice of out.invoices)if(!invoice.orderId||!invoice.number)throw Error('Comprobante inválido.');
@@ -97,12 +108,13 @@ export class Storage {
       if(w.selectedPieceIds.length&&w.selectedPieceIds.length!==Number(w.quantity))throw Error('La cantidad no coincide con las piezas seleccionadas.');
     }
     for(const q of out.quotations)if(!q.number||!out.orders.some(o=>o.id===q.orderId)||!Array.isArray(q.works)||!Array.isArray(q.pieces))throw Error('Cotización inválida en la copia.');
-    return structuredClone(out);
+    validateBackupData(out);return structuredClone(out);
   }
-  async import(payload){
-      const input=this.validate(payload);
+  async import(payload,{expectedState}={}){
+    await verifyBackup(payload);const input=this.validate(payload);
     return this.transact(d=>{
-      if(payload.version===1&&['invoices','inventory','inventoryMoves','monthlyClosures'].some(s=>d[s].length))throw Error('Esta copia antigua no contiene los módulos de Fase 2. Expórtalos antes y usa una instalación vacía para importar la copia antigua.');
+      if(expectedState!==undefined&&JSON.stringify(d)!==expectedState)throw Error('Los datos del taller cambiaron desde la revisión. Selecciona el respaldo nuevamente antes de confirmar.');
+      if(Number(payload.version)===1&&['invoices','inventory','inventoryMoves','monthlyClosures'].some(s=>d[s].length))throw Error('Esta copia antigua no contiene los módulos de Fase 2. Expórtalos antes y usa una instalación vacía para importar la copia antigua.');
       const before=structuredClone(Object.fromEntries(STORES.filter(s=>s!=='snapshots').map(s=>[s,d[s]])));
       const protectedSequence=Math.max(...d.settings.map(s=>Number(s.orderSequence)||0),0);
       const protectedInvoices=Math.max(...d.settings.map(s=>Number(s.invoiceSequence)||0),...d.invoices.map(i=>Number(String(i.number).match(/(\d+)$/)?.[1]||0)),0);
@@ -114,6 +126,7 @@ export class Storage {
       normalize(d,{});
       migrateWorkModel(d);
       const setting=d.settings.find(x=>x.workshopId===1);
+      migrateFullPaint(d);
       setting.orderSequence=Math.max(Number(setting.orderSequence)||0,protectedSequence,...d.orders.map(o=>Number(String(o.number).match(/(\d+)$/)?.[1]||0)));
       setting.invoiceSequence=Math.max(Number(setting.invoiceSequence)||0,protectedInvoices,...d.invoices.map(i=>Number(String(i.number).match(/(\d+)$/)?.[1]||0)));
       setting.quoteSequence=Math.max(Number(setting.quoteSequence)||0,protectedQuotes,...d.quotations.map(q=>Number(String(q.number).match(/(\d+)$/)?.[1]||0)));
