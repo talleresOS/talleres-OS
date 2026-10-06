@@ -25,7 +25,9 @@ const results=[],errors=[];
 const record=(name,detail)=>{results.push({name,status:'passed',detail});console.log('PASS '+name);};
 const context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,deviceScaleFactor:1,serviceWorkers:'block'});
 const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));
-const go=async route=>{await page.goto(origin+'/index.html#'+route);await page.locator('.top').waitFor();};
+// Hash navigation keeps the old shell visible while IndexedDB is read. Wait for the destination, not the previous header.
+const routeTitles={home:'Tu taller,',clients:'Clientes',employees:'Empleados',orders:'Órdenes',production:'Producción',history:'Historial',inventory:'Inventario',monthly:'Cierre mensual',settings:'Configuración',more:'Más'};
+const go=async route=>{await page.goto(origin+'/index.html#'+route);await page.locator('.top h1').filter({hasText:routeTitles[route]}).waitFor();};
 const act=(name)=>page.getByRole('button',{name,exact:true});
 const field=name=>page.getByLabel(name,{exact:true});
 const submit=async name=>{await act(name).click();await page.waitForFunction(()=>!document.querySelector('#dialog').open);};
