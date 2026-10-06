@@ -1,3 +1,4 @@
+import {resolveWarranty,warrantyLabel,deliveryWarranty,parseDuration,calendarExpiry,documentPresentation} from './document-policy.mjs';
 import {find,paid,balance,today} from './domain.mjs';
 import {catalog,PROCESSES,PIECE_CATALOG,isFullPaint} from './work-model.mjs';
 import {documentMarkup,documentHtml,printCustomerDocument} from './documents.mjs';
@@ -30,8 +31,21 @@ export function createDocumentUI(h){
     toast('13 piezas seleccionadas. Puedes quitar, agregar o cambiar cada pieza y sus procesos.');
   }
   function closingForm(o){
-    const w=o.warranty||{kind:'none'};
-    openDialog('Finalizar y entregar','<div class="summary full">'+row('Orden',esc(o.number))+row('Cliente',esc(find(data(),'clients',o.clientId)?.name))+row('Precio total',money(o.total))+row('Total pagado',money(paid(data(),o.id)))+row('Balance',money(balance(data(),o)))+'</div>'+select('Tiene garantía','hasWarranty',[['no','No'],['yes','Sí']],w.kind==='none'?'no':'yes')+field('Duración de garantía','warrantyDuration',w.kind==='months'?w.months+' meses':w.label)+field('Inicio de garantía','warrantyStart',w.startDate||today(),'date')+field('Vencimiento de garantía','warrantyEnd',w.endDate||'','date')+textarea('Condiciones de garantía','warrantyConditions',w.conditions)+textarea('Observaciones finales','finalNotes',o.customerNotes)+'<p class="help full">Revisa la garantía acordada con el cliente antes de cerrar. Sus condiciones y fechas quedarán guardadas en esta orden.</p>','document-close',{orderId:o.id},'Finalizar orden');
+    const w=deliveryWarranty(resolveWarranty(data().settings[0],o),today());
+    openDialog('Finalizar y entregar','<div class="summary full">'+row('Orden',esc(o.number))+row('Cliente',esc(find(data(),'clients',o.clientId)?.name))+row('Precio total',money(o.total))+row('Total pagado',money(paid(data(),o.id)))+row('Balance',money(balance(data(),o)))+'</div>'+select('Tiene garantía','hasWarranty',[['no','No'],['yes','Sí']],w.kind==='none'?'no':'yes')+field('Duración de garantía','warrantyDuration',w.kind==='none'?'':w.duration||warrantyLabel(w))+select('Unidad de garantía','warrantyUnit',[['months','Meses'],['years','Años'],['days','Días'],['custom','Texto personalizado']],w.unit||'months')+field('Inicio de garantía','warrantyStart',today(),'date','readonly')+field('Vencimiento de garantía','warrantyEnd',w.endDate||'','date')+textarea('Condiciones de garantía','warrantyConditions',w.conditions)+textarea('Observaciones finales','finalNotes',o.customerNotes)+'<p class="help full">La garantía parte de Configuración o del acuerdo personalizado de esta orden. Comienza al entregar hoy; los meses se calculan por calendario. Los cambios aquí solo afectan esta orden.</p>','document-close',{orderId:o.id},'Finalizar orden');
+  }
+  function settingsFields(){
+    const p=documentPresentation(data().settings[0]?.documents);
+    const yesno=[['yes','Sí'],['no','No']];
+    return '<section class="panel"><h2>Documentos</h2><form class="form" data-form="document-settings">'+select('Estilo de documentos','style',[['classic','Clásico'],['modern','Moderno'],['compact','Compacto']],p.style)+select('Color de documentos','colorMode',[['workshop','Usar tema del taller'],['custom','Personalizado']],p.colorMode)+field('Color personalizado de documentos','color',p.color,'color')+select('Mostrar logo','showLogo',yesno,p.showLogo?'yes':'no')+select('Mostrar firma','showSignature',yesno,p.showSignature?'yes':'no')+select('Cotización predeterminada','quoteMode',[['summary','Resumida'],['detailed','Detallada']],p.quoteMode)+select('Mostrar detalle de piezas','showPieces',yesno,p.showPieces?'yes':'no')+'<p class="help full">Solo presentación de documentos nuevos. Los documentos guardados conservan su configuración. La detallada usa únicamente precios de venta desglosados que ya estén guardados.</p><div class="full"><button class="btn primary">Guardar documentos</button></div></form></section>';
+  }
+  function updateWarrantyDates(changed){
+    const form=document.querySelector('[data-form="document-close"]');if(!form)return;
+    if(changed==='warrantyUnit'){const previous=parseDuration(form.elements.warrantyDuration.value);if(previous)form.elements.warrantyDuration.value=previous.duration;}
+    const duration=parseDuration(form.elements.warrantyDuration.value,form.elements.warrantyUnit.value);
+    if(duration)form.elements.warrantyUnit.value=duration.unit;
+    form.elements.warrantyStart.value=today();form.elements.warrantyEnd.readOnly=!!duration;
+    if(duration)form.elements.warrantyEnd.value=calendarExpiry(today(),duration.duration,duration.unit);
   }
   async function handleAction(action,target){
     if(action==='reception-full'){
@@ -41,7 +55,7 @@ export function createDocumentUI(h){
     if(action==='reception-view'){show(find(data(),'orders',target)?.initialReceipt);return true;}
     if(action==='invoice'){const o=find(data(),'orders',target);show(find(data(),'invoices',o?.invoiceId));return true;}
     if(action==='invoice-id'){show(find(data(),'invoices',target));return true;}
-    if(action==='close-order'){closingForm(find(data(),'orders',target));return true;}
+    if(action==='close-order'){closingForm(find(data(),'orders',target));updateWarrantyDates();return true;}
     if(!action.startsWith('document-'))return false;
     if(!shown)throw Error('Abre el documento primero.');
     const filename=(shown.kind==='reception'?'Comprobante-':'Factura-')+(shown.orderNumber||shown.number)+'.html';
@@ -60,8 +74,9 @@ export function createDocumentUI(h){
     return true;
   }
   async function submit(form,context){
+    if(form.dataset.form==='document-settings'){const v=Object.fromEntries(new FormData(form));await service.settings({documents:{...v,showLogo:v.showLogo==='yes',showSignature:v.showSignature==='yes',showPieces:v.showPieces==='yes'}});await render();toast('Preferencias de documentos guardadas.');return true;}
     if(form.dataset.form!=='document-close')return false;
     const invoice=await service.closeOrder(context.orderId,Object.fromEntries(new FormData(form)));await render();show(invoice);toast('Orden finalizada. Factura generada y guardada en el historial.');return true;
   }
-  return {show,creationFields,creationValues,handleAction,submit,expandFullPaint,isFullPaint};
+  return {show,settingsFields,updateWarrantyDates,creationFields,creationValues,handleAction,submit,expandFullPaint,isFullPaint};
 }

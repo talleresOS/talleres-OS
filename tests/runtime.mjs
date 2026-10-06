@@ -24,5 +24,5 @@ try{
  const request=await fetch(base+'/api/assistant/session',{method:'POST',headers:{Origin:base,'Content-Type':'application/json'},body:'{"code":"unused"}'});
  assert.equal(request.status,503);assert.equal(request.headers.get('access-control-allow-origin'),base);assert.equal((await request.json()).code,'not_configured');
  const version=await (await fetch(base+'/version.json')).json();assert.equal(version.version,'3.0.0');
- console.log('PASS Runtime independiente: copia sin Git, sin node_modules y sin secretos; 32 recursos, API opcional 503 y rutas privadas inaccesibles.');
+ console.log('PASS Runtime independiente: copia sin Git, sin node_modules y sin secretos; 33 recursos, API opcional 503 y rutas privadas inaccesibles.');
 }finally{child.kill();await closed;}

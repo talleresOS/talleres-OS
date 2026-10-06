@@ -74,7 +74,9 @@ try{
  assert.equal(result.fullCount,13);assert.equal(result.twelve.quantity,12);assert.equal(result.twelve.total,4800);assert.equal(result.davidFive.total,2500);assert.equal(result.configured,11);
  assert.equal(result.quote.warranty.months,6);assert.equal(result.receipt.warranty.months,6);assert.equal(result.order.warranty.months,6);
  assert.doesNotMatch(result.quoteLeak,/David|Francisco|Carlos|employeeId|ledger|laborCost|profit/);assert.doesNotMatch(result.invoiceLeak,/David|Francisco|Carlos|employeeId|ledger|laborCost|profit/);
- assert.equal(result.deniedBalance,true);assert.equal(result.deniedClosed,true);assert.equal(result.order.lifecycle,'closed');assert.equal(result.priceOrder.agreementStale,true);assert.equal(result.priceOrder.priceHistory.length,2);assert.equal(result.q3.warranty.kind,'none');assert.equal(result.issues.length,0);assert.equal(result.backupVersion,3);assert.equal(result.preservedImport,true);
+ assert.equal(result.deniedBalance,true);assert.equal(result.deniedClosed,true);assert.equal(result.order.lifecycle,'closed');assert.equal(result.priceOrder.agreementStale,true);assert.equal(result.priceOrder.priceHistory.length,2);assert.equal(result.q3.warranty.months,12);
+ // The confirmed order agreement takes priority over changed workshop defaults.
+assert.equal(result.issues.length,0);assert.equal(result.backupVersion,3);assert.equal(result.preservedImport,true);
  assert.equal(result.fixed.total,777);assert.equal(result.crossOrderRejected,true);assert.equal(result.coverageFinished,false);assert.equal(result.emptyFinished,true);assert.equal(result.invalidLogo.fallback,true);assert.equal(result.pendingOnReopen,1);
  assert.equal(h.errors.length,0,h.errors.join('\n'));
  await writeFile(path.join(out,'work-model-results.json'),JSON.stringify({status:'passed',cases:[1,2,3,4,5,6,7,8,11,12,13],result},null,2));

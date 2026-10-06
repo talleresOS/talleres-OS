@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "build": "node prepare-release.mjs",
-    "test": "node tests/work-model.mjs && node tests/work-ui.mjs && node tests/work-migration.mjs && node tests/phase2.mjs && node tests/edge-cases.mjs && node tests/documents-model.mjs && node tests/documents-upgrade.mjs && node tests/documents.mjs && node tests/final-audit.mjs && node tests/update-notice.mjs && node tests/assistant.mjs && node tests/assistant-ui.mjs && node tests/assistant-server.mjs && node tests/assistant-safety.mjs && node tests/vercel.mjs && node tests/assignment-consolidation.mjs && node tests/assistant-intake.mjs && node tests/backup.mjs && node tests/ai-resilience.mjs && node tests/visual.mjs",
+    "test": "node tests/work-model.mjs && node tests/work-ui.mjs && node tests/work-migration.mjs && node tests/phase2.mjs && node tests/edge-cases.mjs && node tests/documents-model.mjs && node tests/documents-upgrade.mjs && node tests/documents.mjs && node tests/final-audit.mjs && node tests/update-notice.mjs && node tests/assistant.mjs && node tests/assistant-ui.mjs && node tests/assistant-server.mjs && node tests/assistant-safety.mjs && node tests/vercel.mjs && node tests/assignment-consolidation.mjs && node tests/assistant-intake.mjs && node tests/backup.mjs && node tests/ai-resilience.mjs && node tests/visual.mjs && node tests/document-family.mjs",
     "test:ui": "node tests/work-ui.mjs",
     "test:upgrade": "node tests/work-migration.mjs",
     "start:assistant": "node server/server.mjs",

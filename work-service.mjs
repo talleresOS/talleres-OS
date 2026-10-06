@@ -193,12 +193,13 @@ export const workMethods={
     (o.priceHistory ||= []).push({id:uid(),from:n(o.total),to:n(total),at:at(),reason,previousAgreement:structuredClone(o.agreement||null)});
     o.agreementStale=!!o.agreement;o.total=total;
   },
-  async createQuote(orderId,conditions,price){
+  async createQuote(orderId,conditions,price,options={}){
     return this.change(d=>{
       const o=this.order(d,orderId),s=d.settings[0];
       s.quoteSequence=Math.max(n(s.quoteSequence),...d.quotations.map(q=>Number(String(q.number).match(/(\d+)$/)?.[1]||0)))+1;
       const prefix=text(s.prefix||'ORD').toUpperCase().replace(/[^A-Z0-9-]/g,'')||'ORD';
       const q=customerQuote(d,{...o,total:price===undefined?o.total:amount(price)},prefix+'-COT-'+String(s.quoteSequence).padStart(6,'0'),conditions??s.quoteConditions);
+      q.quoteMode=options.mode==='detailed'?'detailed':options.mode==='summary'?'summary':q.presentation.quoteMode;
       d.quotations.push(q);this.event(d,'quote-created',o.id,'Cotización '+q.number+' · '+q.total);return q;
     });
   },

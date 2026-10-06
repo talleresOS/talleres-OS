@@ -1,7 +1,7 @@
 # TallerOS — reglas de continuidad (Independence Release)
 
 ## Proyecto y alcance
-- Trabajo actual: codex/visual-3-0; consultar docs/VISUAL-3.0.0.md y el encabezado más reciente de CONTINUIDAD.md. dashboard-ui.mjs es presentación de solo lectura; --workshop-image permite cambiar el fondo.
+- Trabajo actual: codex/documents-3-0; leer docs/DOCUMENT-FAMILY-3.0.md; consultar docs/VISUAL-3.0.0.md y el encabezado más reciente de CONTINUIDAD.md. dashboard-ui.mjs es presentación de solo lectura; --workshop-image permite cambiar el fondo.
 - Repositorio maestro: https://github.com/talleresOS/talleres-OS.
 - Producción: https://talleresos.github.io/talleres-OS/index.html, main 3.0.0 publicada y verificada el 05/10/2026; commit f80cc2381b59dc434096600c2f53c50288950fee.
 - Código completo 3.0.0 en rama codex/visual-3-0; main mantiene la distribución estática existente. Leer CONTINUIDAD.md y docs/INDEPENDENCE-3.0.0.md antes de actuar. Los informes 2.x son antecedentes.
@@ -15,7 +15,7 @@
 - Toda escritura operativa pasa por service.mjs/work-service.mjs y una transacción de storage.mjs. Respetar órdenes y cuentas cerradas.
 - IndexedDB talleros2 **esquema 3**, auxiliar histórica talleros2-ledger conservada. App 3.0 no cambia el esquema.
 - backup.mjs valida y sella el envoltorio de respaldo; storage gestiona preview, stale guard y recuperación atómica.
-- documents.mjs, documents-style.mjs y document-ui.mjs son exclusivos de documentos del cliente.
+- documents.mjs, documents-style.mjs y document-ui.mjs son exclusivos de documentos del cliente; document-policy.mjs centraliza garantía, branding y preferencias. Documento nuevo usa Configuración o acuerdo propio, luego snapshot inmutable. Garantía inicia en entrega real y vence por calendario.
 - assistant-*.mjs: contrato, resolución local, acciones controladas, proveedor, UI y voz. server/*.mjs y api/assistant.mjs: backend.
 - scripts/dev.mjs sirve solo dist; prepare-release.mjs genera lista pública; scripts/check-release.mjs verifica hashes/versiones/secretos.
 
@@ -56,7 +56,7 @@
 - npm run dev (no necesita Codex ni API key).
 - npm run build; npm run check:release; npm test; npm run test:runtime.
 - TALLEROS_BROWSER opcional para un ejecutable instalado; TALLEROS_PLAYWRIGHT opcional, no requisito. TALLEROS_TEST_OUTPUT dentro de .test-results.
-- 20 suites actuales + runtime; las migraciones usan tests/fixtures con SHA-256, no tags Git. ui-refresh/ui-upgrade son archivos históricos 2.2, fuera de la suite vigente.
+- 21 suites actuales + runtime; las migraciones usan tests/fixtures con SHA-256, no tags Git. ui-refresh/ui-upgrade son archivos históricos 2.2, fuera de la suite vigente.
 - Modificar la raíz y regenerar dist; nunca editar ambas copias a mano. Solo dist es público.
 - No imprimir/cargar archivos secretos en auditorías. Escanear listas explícitas de código público y metadatos, sin mostrar valores.
 

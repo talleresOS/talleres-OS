@@ -1,3 +1,7 @@
+# Trabajo de documentos
+
+Rama codex/documents-3-0; build 3.0.0-documents-20261006. Ver docs/DOCUMENT-FAMILY-3.0.md para estado de publicación.
+
 # Ubicación y versiones
 - Código maestro: https://github.com/talleresOS/talleres-OS
 - Rama actual: codex/visual-3-0

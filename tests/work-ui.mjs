@@ -62,7 +62,7 @@ try{
  pass('Cotización sin importes internos; garantía congelada; descarga y enlace WhatsApp honesto; logo y paleta');
  for(const process of ['Preparación','Pintura']){await work(process).getByRole('button',{name:'Terminar',exact:true}).click();await submit('Terminar trabajo');}
  await button('Cobrar saldo').click();await field('Monto recibido').fill('20000');await submit('Guardar pago');assert.match(await p.locator('.status-panel').innerText(),/30,000/);
- await button('Cobrar saldo').click();await submit('Guardar pago');await button('Finalizar y entregar').click();await field('Vencimiento de garantía').fill('2027-04-10');await button('Finalizar orden').click();await p.locator('.receipt').waitFor();
+ await button('Cobrar saldo').click();await submit('Guardar pago');await button('Finalizar y entregar').click();await button('Finalizar orden').click();await p.locator('.receipt').waitFor();
  const delivery=await p.locator('.receipt').innerText();assert.match(delivery,/Conformidad de entrega/);assert.match(delivery,/Firma:/);assert.match(delivery,/6 meses/);assert.doesNotMatch(delivery,/Francisco|David|Carlos|ganancia/);
  await p.screenshot({path:path.join(out,'delivery-mobile.png'),fullPage:true});await button('×').click();
  await go('home');assert.equal(await p.getByText('Lexus G350',{exact:true}).count(),0);await go('production');assert.equal(await p.getByText('Lexus G350',{exact:true}).count(),0);await go('history');await p.getByRole('link',{name:/Lexus G350/}).click();assert.equal(await button('Asignar trabajo').count(),0);assert.equal(await button('Terminar').count(),0);await button('Rentabilidad').click();assert.match(await p.locator('main').innerText(),/46,300/);

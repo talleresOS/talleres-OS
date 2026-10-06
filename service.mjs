@@ -1,3 +1,4 @@
+import {resolveWarranty,normalizeWarranty,parseDuration,deliveryWarranty,documentPresentation} from './document-policy.mjs';
 import {Storage} from './storage.mjs';
 import {assistantMethods} from './assistant-service.mjs';
 import {workMethods} from './work-service.mjs';
@@ -34,6 +35,7 @@ export class TallerService {
     return this.change(d=>{
       assert(text(v.name)&&text(v.phone),'Nombre y teléfono son obligatorios.');
       const fields={name:text(v.name),phone:text(v.phone),whatsapp:text(v.whatsapp),document:text(v.document),address:text(v.address),notes:text(v.notes)};
+      if(v.email!==undefined)fields.email=text(v.email);
       const old=id?find(d,'clients',id):null;assert(!id||old,'Cliente no encontrado.');
       return old?Object.assign(old,fields):this.add(d,'clients',fields);
     });
@@ -189,17 +191,23 @@ export class TallerService {
       assert(balance(d,o)===0,'Todavía hay saldo pendiente.');
       assert(!o.agreementStale,'Confirma una nueva cotización con el precio actual antes de entregar.');
       assert(paid(d,o.id)<=n(o.total)+0.005,'Revisa el exceso de pago antes de cerrar.');
+      o.warranty=resolveWarranty(d.settings[0],o);
       if(details){
         assert(['yes','no'].includes(details.hasWarranty),'Indica si el trabajo tiene garantía.');
         const has=details.hasWarranty==='yes';
         if(has){
           assert(text(details.warrantyDuration),'Indica la duración de la garantía.');
-          const start=this.date(details.warrantyStart),end=this.date(details.warrantyEnd);
-          assert(end>=start,'El vencimiento no puede ser anterior al inicio.');
-          o.warranty={kind:'custom',label:text(details.warrantyDuration),startDate:start,endDate:end,conditions:text(details.warrantyConditions)};
+          const start=details.warrantyStart?this.date(details.warrantyStart):today(),end=details.warrantyEnd?this.date(details.warrantyEnd):'';
+          if(end)assert(end>=start,'El vencimiento no puede ser anterior al inicio.');
+          const duration=parseDuration(details.warrantyDuration,details.warrantyUnit||'months');
+          assert(duration||end,'Indica el vencimiento de la garantía personalizada.');
+          o.warranty=normalizeWarranty({kind:'custom',label:text(details.warrantyDuration),...duration,startDate:start,endDate:end,conditions:text(details.warrantyConditions)});
         }else o.warranty={kind:'none'};
         o.customerNotes=text(details.finalNotes);o.warrantyReviewedAt=new Date().toISOString();
       }
+      o.warranty=deliveryWarranty(o.warranty,today());
+      if(o.warranty.kind!=='none')assert(o.warranty.endDate,'Revisa el vencimiento de la garantía personalizada antes de entregar.');
+      if(o.warranty.kind!=='none'&&o.warranty.endDate)assert(o.warranty.endDate>=today(),'El vencimiento no puede ser anterior a la entrega.');
       const at=new Date().toISOString(),setting=d.settings[0];
       setting.invoiceSequence=n(setting.invoiceSequence)+1;
       const invoice=customerInvoice(d,o,(text(setting.prefix||'ORD').toUpperCase().replace(/[^A-Z0-9-]/g,'')||'ORD')+'-C-'+String(setting.invoiceSequence).padStart(6,'0'),at);
@@ -287,6 +295,8 @@ export class TallerService {
   }
   async settings(v){
     return this.change(d=>{const s=d.settings[0];for(const key of ['name','phone','whatsapp','email','address','document','prefix'])if(v[key]!==undefined)s[key]=text(v[key]);if(v.logoData!==undefined)s.logoData=v.logoData;if(v.painterRate!==undefined)s.painterRate=amount(v.painterRate||0,true);
+      if(v.instagram!==undefined){const value=text(v.instagram);assert(!value||/^@?[a-zA-Z0-9._]{1,30}$/.test(value)||/^https:\/\/(www\.)?instagram\.com\/[a-zA-Z0-9._]+\/?$/.test(value),'Indica el usuario de Instagram o su URL https.');s.instagram=value;}
+      if(v.website!==undefined){const value=text(v.website);let valid=!value;try{const url=new URL(value);valid=['http:','https:'].includes(url.protocol)&&!url.username&&!url.password;}catch{}assert(valid,'Indica una página web válida con https://.');s.website=value;}
       if(v.appearance!==undefined){
         const a=v.appearance;
         assert(a&&['dark','light'].includes(a.theme),'Selecciona un tema válido.');
@@ -307,6 +317,11 @@ export class TallerService {
         if(w.kind==='months')assert([3,6,12].includes(Number(w.months)),'Duración de garantía inválida.');
         if(w.kind==='custom')assert(text(w.label),'Describe la garantía personalizada.');
         s.warranty={kind:w.kind,months:w.kind==='months'?Number(w.months):null,label:w.kind==='custom'?text(w.label):'',conditions:text(w.conditions)};
+      }
+      if(v.documents!==undefined){
+        assert(v.documents&&['classic','modern','compact'].includes(v.documents.style),'Estilo de documento inválido.');
+        assert(['workshop','custom'].includes(v.documents.colorMode)&&/^#[a-f0-9]{6}$/i.test(v.documents.color||''),'Color de documento inválido.');
+        s.documents={...s.documents,...documentPresentation(v.documents)};
       }
       if(v.quoteConditions!==undefined)s.quoteConditions=text(v.quoteConditions);
     });

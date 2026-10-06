@@ -1,3 +1,4 @@
+import {resolveWarranty,documentPresentation,workshopSnapshot} from './document-policy.mjs';
 import {worksFor,piecesFor,workPieceNames,oldAssignmentMapped} from './work-model.mjs';
 export const VERSION = '3.0.0';
 export const MAIN = ['settings','clients','vehicles','orders','parts','employees','payments','costs'];
@@ -94,17 +95,17 @@ export function customerInvoice(d,o,number,at=new Date().toISOString()) {
   const payments=d.payments.filter(p=>belongs(p,o.id)&&!p.voided).sort((a,b)=>String(a.date).localeCompare(String(b.date))||n(a.id)-n(b.id));
   // Explicit allowlist: internal costs, employee pay and order notes never enter the customer document.
   return {id:uid(),workshopId:1,orderId:o.id,number,orderNumber:o.number,issuedAt:at,closedAt:at,entryDate:o.entryDate,
-    documentVersion:1,kind:'invoice',issuedDate:day(at),dueDate:o.dueDate,conditions:String(o.workConditions||''),receptionNotes:String(o.receptionNotes||''),
-    workshop:{name:setting.name,logoData:setting.logoData,phone:setting.phone,whatsapp:setting.whatsapp,address:setting.address,document:setting.document,email:setting.email,appearance:structuredClone(setting.appearance||{})},
-    client:{name:client.name,phone:client.phone,whatsapp:client.whatsapp,document:client.document},
-    vehicle:{brand:vehicle.brand,model:vehicle.model,year:vehicle.year,plate:vehicle.plate,color:vehicle.color},
-    works:customerWorks(d,o),pieces:piecesFor(d,o.id).map(p=>({name:p.name})),warranty:structuredClone(o.warranty||{kind:'none'}),agreement:o.agreement?{price:o.agreement.price,confirmedAt:o.agreement.confirmedAt,quoteNumber:o.agreement.quoteNumber}:null,
+    documentVersion:2,presentation:documentPresentation(setting.documents),kind:'invoice',issuedDate:day(at),dueDate:o.dueDate,conditions:String(o.workConditions||''),receptionNotes:String(o.receptionNotes||''),
+    workshop:workshopSnapshot(setting),
+    client:{name:client.name,phone:client.phone,whatsapp:client.whatsapp,document:client.document,email:client.email},
+    vehicle:{brand:vehicle.brand,model:vehicle.model,year:vehicle.year,plate:vehicle.plate,color:vehicle.color,vin:vehicle.vin},
+    works:customerWorks(d,o),pieces:piecesFor(d,o.id).map(p=>({name:p.name})),warranty:resolveWarranty(setting,o),agreement:o.agreement?{price:o.agreement.price,confirmedAt:o.agreement.confirmedAt,quoteNumber:o.agreement.quoteNumber}:null,
     payments:payments.map((p,i)=>({amount:n(p.amount),date:p.date,method:p.method||'No registrado',final:balance(d,o)===0&&p.kind!=='initial'&&i===payments.length-1})),
     total:n(o.total),paid:paid(d,o.id),balance:balance(d,o),notes:String(o.customerNotes||'')};
 }
 export function customerReception(d,o){
   const receipt=customerInvoice(d,o,o.number,o.createdAt);
-  receipt.kind='reception';receipt.closedAt=null;receipt.warranty={kind:'none'};receipt.notes='';
+  receipt.kind='reception';receipt.closedAt=null;delete receipt.warranty.startDate;delete receipt.warranty.endDate;receipt.notes='';
   return receipt;
 }
 export function documentPaymentSummary(i){
@@ -160,11 +161,11 @@ export function customerWorks(d,o){
 }
 export function customerQuote(d,o,number,conditions,at=new Date().toISOString()){
   const s=d.settings[0],c=find(d,'clients',o.clientId)||{},v=find(d,'vehicles',o.vehicleId)||{};
-  return {id:uid(),workshopId:1,orderId:o.id,number,issuedAt:at,orderNumber:o.number,version:d.quotations.filter(q=>belongs(q,o.id)).length+1,
-    workshop:{name:s.name,phone:s.phone,whatsapp:s.whatsapp,address:s.address,document:s.document,logoData:s.logoData},
-    client:{name:c.name,phone:c.phone,whatsapp:c.whatsapp},vehicle:{brand:v.brand,model:v.model,year:v.year,plate:v.plate},
+  return {id:uid(),kind:'quote',documentVersion:2,presentation:documentPresentation(s.documents),dueDate:o.dueDate,workshopId:1,orderId:o.id,number,issuedAt:at,orderNumber:o.number,version:d.quotations.filter(q=>belongs(q,o.id)).length+1,
+    workshop:workshopSnapshot(s),
+    client:{name:c.name,phone:c.phone,whatsapp:c.whatsapp,email:c.email},vehicle:{brand:v.brand,model:v.model,year:v.year,plate:v.plate,color:v.color,vin:v.vin},
     pieces:piecesFor(d,o.id).map(p=>({name:p.name})),works:customerWorks(d,o),total:n(o.total),conditions:String(conditions||''),
-    warranty:structuredClone(s.warranty||{kind:'none'}),confirmedAt:null};
+    warranty:resolveWarranty(s,o),confirmedAt:null};
 }
 export function audit(d) {
   const issues=[];

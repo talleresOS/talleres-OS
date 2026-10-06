@@ -8,7 +8,7 @@ import {root,out} from './harness.mjs';
 await mkdir(out,{recursive:true});
 const {chromium}=await import(process.env.TALLEROS_PLAYWRIGHT?pathToFileURL(process.env.TALLEROS_PLAYWRIGHT).href:'playwright');
 const oldNames=['index.html','app.js','styles.css','domain.mjs','storage.mjs','service.mjs','pwa.js','sw.js','version.json','manifest.json','manifest.webmanifest','icon.svg','icon-192.png','icon-512.png','apple-touch-icon.png'];
-const names=[...oldNames,'work-model.mjs','work-service.mjs','work-ui.mjs','logo-palette.mjs','documents.mjs','documents-style.mjs','document-ui.mjs',"dashboard-ui.mjs","workshop-background.webp","backup.mjs","interface.css","assistant-contract.mjs","assistant-core.mjs","assistant-service.mjs","assistant-provider.mjs","assistant-voice.mjs","assistant-ui.mjs"];
+const names=[...oldNames,'work-model.mjs','work-service.mjs','work-ui.mjs','logo-palette.mjs','documents.mjs','documents-style.mjs','document-ui.mjs',"document-policy.mjs","dashboard-ui.mjs","workshop-background.webp","backup.mjs","interface.css","assistant-contract.mjs","assistant-core.mjs","assistant-service.mjs","assistant-provider.mjs","assistant-voice.mjs","assistant-ui.mjs"];
 const oldSource=await legacySource('2.2.0',oldNames);
 let old=true;
 const server=createServer(async(req,res)=>{try{
@@ -39,7 +39,7 @@ try{
  await p.evaluate(async()=>{const r=await navigator.serviceWorker.getRegistration();await r.update();});
  await p.waitForFunction(async()=>!!(await navigator.serviceWorker.getRegistration())?.waiting);
  await p.close();await new Promise(r=>setTimeout(r,1200));p=await ctx.newPage();p.setDefaultTimeout(20000);await p.goto(origin+'/index.html');await p.locator('.top').waitFor();
- await p.waitForFunction(async()=>{const c=await caches.keys();return c.includes('talleros-phase2-3.0.0-visual-20261005b')&&!c.includes('talleros-phase2-2.2.0');});
+ await p.waitForFunction(async()=>{const c=await caches.keys();return c.includes('talleros-phase2-3.0.0-documents-20261006')&&!c.includes('talleros-phase2-2.2.0');});
  const migrated=await p.evaluate(async()=>{
   const {TallerService}=await import('./service.mjs'),{financial,employeeSummary}=await import('./domain.mjs'),s=new TallerService(),d=await s.init();return {d,finance:d.orders.map(o=>financial(d,o)),employee:employeeSummary(d,d.employees[0].id),recovery:await s.storage.previousModelBackup()};
  });

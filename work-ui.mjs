@@ -1,3 +1,5 @@
+import {documentMarkup,documentHtml as customerDocumentHtml,printCustomerDocument} from './documents.mjs';
+import {warrantyLabel,documentPresentation} from './document-policy.mjs';
 import {n,round,find,belongs,active,closed,financial} from './domain.mjs';
 import {PROCESSES,WORK_STATES,catalog,fullCar,worksFor,piecesFor,workFrozen,workPieceNames,PIECE_CATALOG} from './work-model.mjs';
 export function createWorkUI(h){
@@ -52,26 +54,13 @@ export function createWorkUI(h){
   }
   function warrantyMarkup(w){
     if(!w||w.kind==='none')return '';
-    return '<section class="document-warranty"><h2>Garantía</h2><p>'+esc(w.kind==='months'?w.months+' meses':w.label)+'</p>'+(w.conditions?'<p>'+esc(w.conditions)+'</p>':'')+'</section>';
+    return '<section class="document-warranty"><h2>Garantía</h2><p>'+esc(warrantyLabel(w))+'</p>'+(w.conditions?'<p>'+esc(w.conditions)+'</p>':'')+'</section>';
   }
-  function worksMarkup(works){
-    return '<ul>'+(works||[]).map(w=>'<li><strong>'+esc(w.description)+'</strong>'+(w.pieces?.length?'<br>'+w.pieces.map(esc).join(' · '):w.unspecifiedQuantity?'<br>'+esc(w.unspecifiedQuantity)+' piezas sin especificar':'')+'</li>').join('')+'</ul>';
-  }
-  function documentHeader(q,title){
-    return '<header class="receipt-header">'+(q.workshop.logoData?'<img src="'+esc(q.workshop.logoData)+'" alt="Logo del taller">':'')+'<div><h1>'+esc(q.workshop.name||'Mi taller')+'</h1><p>'+esc(q.workshop.phone)+'</p><p>'+esc(q.workshop.address)+'</p><p>'+esc(q.workshop.document)+'</p></div><div><strong>'+title+'</strong><p>'+esc(q.number)+'</p><p>Orden '+esc(q.orderNumber)+'</p><p>'+date(q.issuedAt)+'</p></div></header>';
-  }
-  function quoteMarkup(q){
-    return '<article class="receipt">'+documentHeader(q,'COTIZACIÓN')+'<h2>'+esc(q.client.name)+'</h2><p>'+esc(q.client.phone)+'</p><p>'+esc([q.vehicle.brand,q.vehicle.model,q.vehicle.year,q.vehicle.plate].filter(Boolean).join(' · '))+'</p><h2>Piezas</h2><p>'+q.pieces.map(p=>esc(p.name)).join(' · ')+'</p><h2>Trabajos</h2>'+worksMarkup(q.works)+'<div class="receipt-total">'+row('Precio propuesto',money(q.total))+'</div><p>Versión '+q.version+' · '+(q.confirmedAt?'Confirmada: '+date(q.confirmedAt):'Pendiente de confirmación')+'</p>'+(q.conditions?'<h2>Condiciones</h2><p>'+esc(q.conditions)+'</p>':'')+warrantyMarkup(q.warranty)+'<footer>Cotización de servicio. No es una factura ni un comprobante de pago.</footer></article>';
-  }
-  function documentHtml(markup,title){
-    return '<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>'+esc(title)+'</title><style>body{font:16px/1.5 system-ui;color:#172334;background:#fff;max-width:780px;margin:24px auto;padding:20px}h1{font-size:25px}h2{font-size:18px;margin-top:24px}.receipt-header{display:flex;gap:20px;flex-wrap:wrap;justify-content:space-between}.receipt-header img{max-width:100px;max-height:80px;object-fit:contain}.row{display:flex;justify-content:space-between;gap:16px;padding:10px 0;border-bottom:1px solid #ddd}.receipt-total{font-size:20px;border-top:2px solid #222;margin-top:20px}p{white-space:pre-wrap;overflow-wrap:anywhere}li{margin:8px 0}footer{font-size:12px;color:#555;margin-top:30px}img{max-width:100%}@media print{body{margin:0;padding:10mm}.receipt-header,.document-warranty,.signature-area{break-inside:avoid}}@page{size:auto;margin:12mm}</style>'+markup+'</html>';
-  }
-  function printDocument(html){
-    const frame=document.createElement('iframe');frame.className='print-frame';frame.title='Impresión del documento';frame.onload=()=>{frame.contentWindow.focus();frame.contentWindow.print();};frame.srcdoc=html;document.body.append(frame);setTimeout(()=>frame.remove(),120000);
-  }
+  const quoteMarkup=q=>documentMarkup({...q,kind:'quote'});
   function showQuote(q){
     const editable=active(find(data(),'orders',q.orderId));
     openDialog('Cotización '+q.number,quoteMarkup(q)+'<div class="dialog-actions">'+(editable&&!q.confirmedAt?button('Confirmar precio acordado','quote-confirm',q.id,'primary'):'')+button('Enviar por WhatsApp','quote-whatsapp',q.id)+button('Compartir','quote-share',q.id)+button('Imprimir / PDF','quote-print',q.id)+button('Descargar documento','quote-download',q.id)+'</div>');
+    document.querySelector('#dialog').classList.add('document-dialog');
   }
   function documents(o){
     const quotes=data().quotations.filter(q=>belongs(q,o.id));
@@ -128,13 +117,13 @@ export function createWorkUI(h){
     };
     if(mutations[action]){await mutations[action]();document.querySelector('#dialog').close();await render();toast(action==='work-finish-yes'?'Trabajo terminado.':action==='work-start'?'Trabajo iniciado.':'Cambios guardados.');return true;}
     if(action==='quote-new'){
-      const o=find(d,'orders',target);openDialog('Crear cotización',field('Precio propuesto al cliente','quotePrice',o.total,'number','required')+textarea('Condiciones para el cliente','quoteConditions',d.settings[0].quoteConditions)+'<p class="help full">Se incluirán las piezas, procesos y garantía configurada. Los pagos de empleados quedan fuera del documento.</p>','work-quote',{orderId:o.id},'Generar cotización');return true;
+      const o=find(d,'orders',target);openDialog('Crear cotización',field('Precio propuesto al cliente','quotePrice',o.total,'number','required')+select('Tipo de cotización','quoteMode',[['summary','Resumida'],['detailed','Detallada']],documentPresentation(d.settings[0].documents).quoteMode)+textarea('Condiciones para el cliente','quoteConditions',d.settings[0].quoteConditions)+'<p class="help full">Se incluirán las piezas, procesos y garantía configurada. Los pagos de empleados quedan fuera del documento.</p>','work-quote',{orderId:o.id},'Generar cotización');return true;
     }
     if(action.startsWith('quote-')){
       const q=find(d,'quotations',target);if(!q)throw Error('Cotización no encontrada.');
-      const html=documentHtml(quoteMarkup(q),q.number),filename=q.number+'.html';
+      const html=customerDocumentHtml({...q,kind:'quote'}),filename=q.number+'.html';
       if(action==='quote-view')showQuote(q);
-      if(action==='quote-print')printDocument(html);
+      if(action==='quote-print')printCustomerDocument({...q,kind:'quote'});
       if(action==='quote-download')download(filename,html,'text/html');
       if(action==='quote-share'){
         const file=new File([html],filename,{type:'text/html'});
@@ -168,7 +157,7 @@ export function createWorkUI(h){
       await service.settings({warranty:{kind:['3','6','12'].includes(choice)?'months':choice,months:Number(choice),label:v.warrantyLabel,conditions:v.warrantyConditions},quoteConditions:v.quoteConditions});return true;
     }
     if(form.dataset.form==='work-quote'){
-      const q=await service.createQuote(c.orderId,v.quoteConditions,v.quotePrice);await render();showQuote(q);return 'keep-dialog';
+      const q=await service.createQuote(c.orderId,v.quoteConditions,v.quotePrice,{mode:v.quoteMode});await render();showQuote(q);return 'keep-dialog';
     }
     return false;
   }
@@ -176,5 +165,5 @@ export function createWorkUI(h){
     if(a.id)return '<div class="movement"><a class="back" href="#order/'+a.orderId+'">'+esc(find(data(),'orders',a.orderId)?.number||'Ver orden')+'</a>'+workCard(a,false)+'</div>';
     return row(esc(a.work||'Trabajo histórico')+' · '+esc(find(data(),'orders',a.orderId)?.number),money(a.total));
   }
-  return {orderContent,productionContent,workCard,piecesForm,workForm,updatePicker,settingsExtra,handleAction,submit,documents,warrantyMarkup,worksMarkup,documentHeader,printDocument,employeeAssignment};
+  return {orderContent,productionContent,workCard,piecesForm,workForm,updatePicker,settingsExtra,handleAction,submit,documents,warrantyMarkup,employeeAssignment};
 }

@@ -1,3 +1,7 @@
+# Familia de documentos — 06/10/2026
+
+Build 3.0.0-documents-20261006, rama codex/documents-3-0. Implementación y 21 suites locales aprobadas; build/runtime aprobados. Ver docs/DOCUMENT-FAMILY-3.0.md para auditoría de garantía, snapshots/branding y verificación de publicación. Conserva esquema 3 y URL. No reconstruir ni repetir implementación.
+
 # Estado vigente — rediseño publicado y verificado · 05/10/2026
 
 Build 3.0.0-visual-20261005b. Fuente funcional 02a334c3f1d93b79a05eeafb7e2cbddb2c8ce5f0 en codex/visual-3-0. main f80cc2381b59dc434096600c2f53c50288950fee. Pages 37385663302 correcto; 32 hashes coincidentes y flujo completo/móvil/offline verificado. 20 suites + runtime + build aprobados localmente y en GitHub Actions 37385477892.

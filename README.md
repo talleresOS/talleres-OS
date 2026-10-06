@@ -2,7 +2,7 @@
 
 Gestión de un taller de carrocería y pintura: clientes, vehículos, órdenes, piezas, procesos, empleados, cobros, costos, inventario, documentos y cierres. Esta versión consolida el proyecto existente; no lo reconstruye.
 
-**Estado:** 3.0.0, build 3.0.0-visual-20261005b publicada el 05/10/2026; código completo en `codex/visual-3-0`. Producción en GitHub Pages, [misma URL](https://talleresos.github.io/talleres-OS/index.html). Vercel está preparado, no desplegado/verificado. La última llamada real a OpenAI fue rechazada por saldo API agotado; las pruebas posteriores usan proveedores simulados. No confundir estas pruebas con una validación de IA real.
+**Estado:** 3.0.0, build 3.0.0-visual-20261005b publicada el 05/10/2026; código completo en `codex/documents-3-0`. Producción en GitHub Pages, [misma URL](https://talleresos.github.io/talleres-OS/index.html). Vercel está preparado, no desplegado/verificado. La última llamada real a OpenAI fue rechazada por saldo API agotado; las pruebas posteriores usan proveedores simulados. No confundir estas pruebas con una validación de IA real.
 
 TallerOS funciona sin ChatGPT Plus, Codex ni OpenAI. La IA es opcional; necesita un backend y una cuenta API con saldo. GitHub guarda código, **no los datos de tu taller**.
 
@@ -11,7 +11,7 @@ TallerOS funciona sin ChatGPT Plus, Codex ni OpenAI. La IA es opcional; necesita
 Requisitos de desarrollo: Git, Node.js 24 (incluye npm) y acceso a npm para instalar las herramientas de prueba. No se necesita una herramienta de OpenAI.
 
 ```sh
-git clone --branch codex/visual-3-0 https://github.com/talleresOS/talleres-OS.git
+git clone --branch codex/documents-3-0 https://github.com/talleresOS/talleres-OS.git
 cd talleres-OS
 npx --yes pnpm@11.25.0 install --frozen-lockfile
 npx --yes pnpm@11.25.0 exec playwright install chromium
@@ -27,9 +27,9 @@ En Linux, Playwright puede requerir `npx --yes pnpm@11.25.0 exec playwright inst
 | Comando | Función |
 | --- | --- |
 | `npm run dev` / `npm start` | App y endpoint local, puerto 4173 |
-| `npm test` | 20 suites de modelo, UI, migración, finanzas, documentos, IA y respaldos |
+| `npm test` | 21 suites de modelo, UI, migración, finanzas, documentos, IA y respaldos |
 | `npm run test:runtime` | Copia sin Git/dependencias/secretos y aislamiento del servidor |
-| `npm run build` | Copia permitida de 32 recursos públicos a dist |
+| `npm run build` | Copia permitida de 33 recursos públicos a dist |
 | `npm run check:release` | Versiones, hashes, lista pública, caché y ausencia de secretos públicos |
 | `npm run start:assistant` | API sola, por defecto 127.0.0.1:8787 |
 
@@ -73,7 +73,7 @@ No hay llamadas automáticas al abrir la app ni reintentos automáticos. La API 
 
 ## Build y despliegue
 
-`npm run build && npm run check:release` no publica. Solo los 32 recursos de `dist` y su manifiesto son públicos. Nunca copiar toda la raíz a un servidor estático.
+`npm run build && npm run check:release` no publica. Solo los 33 recursos de `dist` y su manifiesto son públicos. Nunca copiar toda la raíz a un servidor estático.
 
 Vercel usa `vercel.json`: build Node, salida dist y función /api/assistant. Las claves se configuran como secretos en Vercel. GitHub Pages ya publica el build 3.0 autorizado. Para Vercel, preparar primero un **Preview** de la rama de código completo y verificarlo; **no cambiar dominio ni la URL existente**. Cambiar de origen no mueve IndexedDB: requiere respaldo/importación explícita. [Pasos de despliegue](docs/DEPLOYMENT.md).
 

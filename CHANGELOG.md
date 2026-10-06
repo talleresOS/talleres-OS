@@ -1,3 +1,7 @@
+# 3.0.0 · Familia de documentos · 2026-10-06
+
+Garantía común desde Configuración/acuerdo, snapshots protegidos, branding nativo con Instagram/web, footer común, tres estilos y cotización resumida/detallada con precios de venta reales. Impresión multipágina y vista móvil compacta. Sin nueva migración de IndexedDB.
+
 # 3.0.0 · Visual refresh · 2026-10-05
 
 Dashboard con datos reales, fotografía integrada, navegación y superficies coherentes en escritorio/móvil. Sin cambios de esquema ni lógica operativa. Ver docs/VISUAL-3.0.0.md.
